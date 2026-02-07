@@ -35,8 +35,8 @@
 
 ## Step 4: Configure the App
 
-1. Open `index.html` in a text editor
-2. Find the line with `GOOGLE_SCRIPT_URL` near the top of the script
+1. Open `app.js` in a text editor
+2. Find **line 6** with `GOOGLE_SCRIPT_URL`
 3. Replace `YOUR_GOOGLE_SCRIPT_URL_HERE` with the URL you copied
 4. Save the file
 
