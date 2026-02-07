@@ -1,4 +1,13 @@
-// ===== Expense Tracker Application =====
+// ===== Expense Tracker Application with Google Sheets Integration =====
+
+// ========================================
+// CONFIGURATION - Set your Google Script URL here
+// ========================================
+const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
+// ========================================
+
+// Check if Google Sheets is configured
+const isCloudEnabled = GOOGLE_SCRIPT_URL !== 'YOUR_GOOGLE_SCRIPT_URL_HERE' && GOOGLE_SCRIPT_URL.length > 0;
 
 // Default categories and subcategories
 const defaultCategories = {
@@ -26,7 +35,7 @@ const currencies = {
     'AUD': { symbol: 'A$', code: 'AUD', locale: 'en-AU' }
 };
 
-// Initialize data from localStorage
+// Initialize data from localStorage (fallback)
 let expenses = JSON.parse(localStorage.getItem('expenses')) || [];
 let categories = JSON.parse(localStorage.getItem('categories')) || JSON.parse(JSON.stringify(defaultCategories));
 let settings = JSON.parse(localStorage.getItem('settings')) || {
@@ -35,6 +44,10 @@ let settings = JSON.parse(localStorage.getItem('settings')) || {
     warningThreshold: 80,
     enableNotifications: true
 };
+
+// Sync status
+let isSyncing = false;
+let lastSyncTime = null;
 
 // Chart instances
 let categoryChart = null;
@@ -61,6 +74,8 @@ const alertMessage = document.getElementById('alert-message');
 const alertClose = document.getElementById('alert-close');
 const currencySelect = document.getElementById('currency-select');
 const amountCurrency = document.getElementById('amount-currency');
+const syncStatus = document.getElementById('sync-status');
+const syncBtn = document.getElementById('sync-btn');
 
 // Filter elements
 const filterDateFrom = document.getElementById('filter-date-from');
@@ -107,8 +122,138 @@ const deleteAllBtn = document.getElementById('delete-all');
 // Sort state
 let currentSort = { column: 'date', direction: 'desc' };
 
+// ===== Google Sheets API Functions =====
+async function fetchFromCloud(action) {
+    if (!isCloudEnabled) return null;
+
+    try {
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=${action}`);
+        const data = await response.json();
+        return data.success ? data : null;
+    } catch (error) {
+        console.error('Cloud fetch error:', error);
+        return null;
+    }
+}
+
+async function postToCloud(action, payload) {
+    if (!isCloudEnabled) return null;
+
+    try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ action, ...payload })
+        });
+
+        // With no-cors mode, we can't read the response
+        // But the request will still be processed by the server
+        return { success: true };
+    } catch (error) {
+        console.error('Cloud post error:', error);
+        return null;
+    }
+}
+
+async function syncFromCloud() {
+    if (!isCloudEnabled || isSyncing) return;
+
+    isSyncing = true;
+    updateSyncStatus('syncing');
+
+    try {
+        // Fetch expenses
+        const expensesData = await fetchFromCloud('getExpenses');
+        if (expensesData && expensesData.expenses) {
+            expenses = expensesData.expenses;
+            localStorage.setItem('expenses', JSON.stringify(expenses));
+        }
+
+        // Fetch settings
+        const settingsData = await fetchFromCloud('getSettings');
+        if (settingsData && settingsData.settings && Object.keys(settingsData.settings).length > 0) {
+            settings = { ...settings, ...settingsData.settings };
+            localStorage.setItem('settings', JSON.stringify(settings));
+        }
+
+        // Fetch categories
+        const categoriesData = await fetchFromCloud('getCategories');
+        if (categoriesData && categoriesData.categories) {
+            categories = categoriesData.categories;
+            localStorage.setItem('categories', JSON.stringify(categories));
+        }
+
+        lastSyncTime = new Date();
+        updateSyncStatus('synced');
+
+        // Refresh UI
+        populateCategoryDropdowns();
+        renderExpenses();
+        updateStats();
+        renderCharts();
+        loadSettingsForm();
+
+    } catch (error) {
+        console.error('Sync error:', error);
+        updateSyncStatus('error');
+    }
+
+    isSyncing = false;
+}
+
+async function syncToCloud() {
+    if (!isCloudEnabled) return;
+
+    updateSyncStatus('syncing');
+
+    try {
+        await postToCloud('syncAll', {
+            expenses: expenses,
+            settings: settings,
+            categories: categories
+        });
+
+        lastSyncTime = new Date();
+        updateSyncStatus('synced');
+    } catch (error) {
+        console.error('Sync to cloud error:', error);
+        updateSyncStatus('error');
+    }
+}
+
+function updateSyncStatus(status) {
+    if (!syncStatus) return;
+
+    syncStatus.className = 'sync-status';
+
+    switch (status) {
+        case 'syncing':
+            syncStatus.innerHTML = '🔄 Syncing...';
+            syncStatus.classList.add('syncing');
+            break;
+        case 'synced':
+            const time = lastSyncTime ? lastSyncTime.toLocaleTimeString() : 'now';
+            syncStatus.innerHTML = `☁️ Synced at ${time}`;
+            syncStatus.classList.add('synced');
+            break;
+        case 'error':
+            syncStatus.innerHTML = '⚠️ Sync failed';
+            syncStatus.classList.add('error');
+            break;
+        case 'offline':
+            syncStatus.innerHTML = '📴 Offline mode';
+            syncStatus.classList.add('offline');
+            break;
+        default:
+            syncStatus.innerHTML = '';
+    }
+}
+
 // ===== Initialization =====
-function init() {
+async function init() {
     // Set today's date as default
     const today = new Date().toISOString().split('T')[0];
     expenseDate.value = today;
@@ -126,11 +271,18 @@ function init() {
     // Load settings into form
     loadSettingsForm();
 
-    // Render initial data
+    // Render initial data from localStorage
     renderExpenses();
     updateStats();
     renderCharts();
     renderCategoryList();
+
+    // Sync from cloud if enabled
+    if (isCloudEnabled) {
+        await syncFromCloud();
+    } else {
+        updateSyncStatus('offline');
+    }
 }
 
 // ===== Event Listeners =====
@@ -204,6 +356,11 @@ function setupEventListeners() {
     exportCsvBtn.addEventListener('click', exportToCSV);
     deleteAllBtn.addEventListener('click', handleDeleteAll);
 
+    // Sync button
+    if (syncBtn) {
+        syncBtn.addEventListener('click', syncFromCloud);
+    }
+
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -211,6 +368,11 @@ function setupEventListeners() {
             closeSettingsModal();
         }
     });
+
+    // Auto-sync every 5 minutes if cloud is enabled
+    if (isCloudEnabled) {
+        setInterval(syncFromCloud, 5 * 60 * 1000);
+    }
 }
 
 // ===== Currency Management =====
@@ -312,7 +474,7 @@ function renderSubcategoryList() {
     });
 }
 
-function addNewCategory() {
+async function addNewCategory() {
     const name = newCategoryName.value.trim();
     const icon = newCategoryIcon.value.trim() || '📁';
 
@@ -339,7 +501,7 @@ function addNewCategory() {
     newCategoryIcon.value = '';
 }
 
-function deleteCategory(name) {
+async function deleteCategory(name) {
     if (Object.keys(defaultCategories).includes(name)) {
         alert('Cannot delete default categories');
         return;
@@ -353,7 +515,7 @@ function deleteCategory(name) {
     }
 }
 
-function addNewSubcategory() {
+async function addNewSubcategory() {
     const category = subcategoryCategory.value;
     const name = newSubcategoryName.value.trim();
 
@@ -380,7 +542,7 @@ function addNewSubcategory() {
     newSubcategoryName.value = '';
 }
 
-function deleteSubcategory(category, subcategory) {
+async function deleteSubcategory(category, subcategory) {
     const index = categories[category].subcategories.indexOf(subcategory);
     if (index > -1) {
         categories[category].subcategories.splice(index, 1);
@@ -414,7 +576,7 @@ function loadSettingsForm() {
     enableNotificationsInput.checked = settings.enableNotifications !== false;
 }
 
-function saveBudgetSettings() {
+async function saveBudgetSettings() {
     settings.monthlyBudget = parseFloat(monthlyBudgetInput.value) || 0;
     settings.warningThreshold = parseInt(warningThresholdInput.value) || 80;
     settings.enableNotifications = enableNotificationsInput.checked;
@@ -435,7 +597,7 @@ function checkBudgetAlert() {
 
     const currentMonth = new Date().toISOString().substring(0, 7);
     const monthExpenses = expenses.filter(e => e.date.startsWith(currentMonth));
-    const monthSum = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     const percentage = (monthSum / settings.monthlyBudget) * 100;
 
     if (percentage >= 100) {
@@ -468,10 +630,9 @@ function renderCharts() {
 function renderCategoryChart() {
     const ctx = document.getElementById('category-chart').getContext('2d');
 
-    // Calculate totals by category
     const categoryTotals = {};
     expenses.forEach(exp => {
-        categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + exp.amount;
+        categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + parseFloat(exp.amount);
     });
 
     const labels = Object.keys(categoryTotals);
@@ -497,11 +658,7 @@ function renderCategoryChart() {
             plugins: {
                 legend: {
                     position: 'right',
-                    labels: {
-                        color: '#94a3b8',
-                        font: { size: 12 },
-                        padding: 15
-                    }
+                    labels: { color: '#94a3b8', font: { size: 12 }, padding: 15 }
                 },
                 tooltip: {
                     callbacks: {
@@ -521,7 +678,6 @@ function renderCategoryChart() {
 function renderDailyChart() {
     const ctx = document.getElementById('daily-chart').getContext('2d');
 
-    // Get last 14 days
     const days = [];
     const dailyTotals = {};
 
@@ -535,7 +691,7 @@ function renderDailyChart() {
 
     expenses.forEach(exp => {
         if (dailyTotals.hasOwnProperty(exp.date)) {
-            dailyTotals[exp.date] += exp.amount;
+            dailyTotals[exp.date] += parseFloat(exp.amount);
         }
     });
 
@@ -565,24 +721,11 @@ function renderDailyChart() {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: (context) => formatCurrency(context.raw)
-                    }
-                }
+                tooltip: { callbacks: { label: (context) => formatCurrency(context.raw) } }
             },
             scales: {
-                x: {
-                    ticks: { color: '#94a3b8' },
-                    grid: { color: '#334155' }
-                },
-                y: {
-                    ticks: {
-                        color: '#94a3b8',
-                        callback: (value) => formatCurrency(value)
-                    },
-                    grid: { color: '#334155' }
-                }
+                x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                y: { ticks: { color: '#94a3b8', callback: (value) => formatCurrency(value) }, grid: { color: '#334155' } }
             }
         }
     });
@@ -591,7 +734,6 @@ function renderDailyChart() {
 function renderMonthlyChart() {
     const ctx = document.getElementById('monthly-chart').getContext('2d');
 
-    // Get last 6 months
     const months = [];
     const monthlyTotals = {};
 
@@ -606,7 +748,7 @@ function renderMonthlyChart() {
     expenses.forEach(exp => {
         const expMonth = exp.date.substring(0, 7);
         if (monthlyTotals.hasOwnProperty(expMonth)) {
-            monthlyTotals[expMonth] += exp.amount;
+            monthlyTotals[expMonth] += parseFloat(exp.amount);
         }
     });
 
@@ -641,24 +783,11 @@ function renderMonthlyChart() {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: (context) => formatCurrency(context.raw)
-                    }
-                }
+                tooltip: { callbacks: { label: (context) => formatCurrency(context.raw) } }
             },
             scales: {
-                x: {
-                    ticks: { color: '#94a3b8' },
-                    grid: { color: '#334155' }
-                },
-                y: {
-                    ticks: {
-                        color: '#94a3b8',
-                        callback: (value) => formatCurrency(value)
-                    },
-                    grid: { color: '#334155' }
-                }
+                x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                y: { ticks: { color: '#94a3b8', callback: (value) => formatCurrency(value) }, grid: { color: '#334155' } }
             }
         }
     });
@@ -669,7 +798,6 @@ function generateColors(count) {
         '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
         '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16'
     ];
-
     const colors = [];
     for (let i = 0; i < count; i++) {
         colors.push(baseColors[i % baseColors.length]);
@@ -678,7 +806,7 @@ function generateColors(count) {
 }
 
 // ===== Add Expense =====
-function handleAddExpense(e) {
+async function handleAddExpense(e) {
     e.preventDefault();
 
     const expense = {
@@ -687,11 +815,18 @@ function handleAddExpense(e) {
         category: expenseCategory.value,
         subcategory: expenseSubcategory.value,
         amount: parseFloat(expenseAmount.value),
-        description: expenseDescription.value.trim()
+        description: expenseDescription.value.trim(),
+        currency: settings.currency
     };
 
     expenses.push(expense);
     saveExpenses();
+
+    // Sync to cloud
+    if (isCloudEnabled) {
+        postToCloud('addExpense', { expense });
+    }
+
     renderExpenses();
     updateStats();
     renderCharts();
@@ -707,11 +842,8 @@ function handleAddExpense(e) {
 // ===== Render Expenses =====
 function renderExpenses() {
     let filtered = getFilteredExpenses();
-
-    // Sort expenses
     filtered = sortExpenses(filtered);
 
-    // Clear table
     expenseTbody.innerHTML = '';
 
     if (filtered.length === 0) {
@@ -727,8 +859,7 @@ function renderExpenses() {
         });
     }
 
-    // Update filtered total
-    const total = filtered.reduce((sum, exp) => sum + exp.amount, 0);
+    const total = filtered.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
     filteredTotal.textContent = formatCurrency(total);
 }
 
@@ -739,7 +870,7 @@ function createExpenseRow(expense) {
         <td>${formatDate(expense.date)}</td>
         <td><span class="category-badge">${categoryData.icon} ${expense.category}</span></td>
         <td class="subcategory-text">${expense.subcategory}</td>
-        <td>${formatCurrency(expense.amount)}</td>
+        <td>${formatCurrency(parseFloat(expense.amount))}</td>
         <td class="description-text" title="${expense.description || '-'}">${expense.description || '-'}</td>
         <td class="action-buttons">
             <button class="btn-edit" onclick="openEditModal('${expense.id}')">✏️ Edit</button>
@@ -752,14 +883,10 @@ function createExpenseRow(expense) {
 // ===== Filtering =====
 function getFilteredExpenses() {
     return expenses.filter(expense => {
-        // Date range filter
         if (filterDateFrom.value && expense.date < filterDateFrom.value) return false;
         if (filterDateTo.value && expense.date > filterDateTo.value) return false;
-
-        // Category filter
         if (filterCategory.value && expense.category !== filterCategory.value) return false;
 
-        // Search filter
         if (filterSearch.value) {
             const search = filterSearch.value.toLowerCase();
             const matchesDescription = expense.description?.toLowerCase().includes(search);
@@ -789,7 +916,6 @@ function handleSort(column) {
         currentSort.direction = 'asc';
     }
 
-    // Update sort indicators
     document.querySelectorAll('.sortable').forEach(th => {
         th.classList.remove('sorted-asc', 'sorted-desc');
         if (th.dataset.sort === column) {
@@ -842,7 +968,7 @@ function closeEditModal() {
     editModal.classList.remove('active');
 }
 
-function handleEditExpense(e) {
+async function handleEditExpense(e) {
     e.preventDefault();
 
     const id = editId.value;
@@ -855,10 +981,16 @@ function handleEditExpense(e) {
             category: editCategory.value,
             subcategory: editSubcategory.value,
             amount: parseFloat(editAmount.value),
-            description: editDescription.value.trim()
+            description: editDescription.value.trim(),
+            currency: settings.currency
         };
 
         saveExpenses();
+
+        if (isCloudEnabled) {
+            postToCloud('updateExpense', { expense: expenses[index] });
+        }
+
         renderExpenses();
         updateStats();
         renderCharts();
@@ -868,10 +1000,15 @@ function handleEditExpense(e) {
 }
 
 // ===== Delete Expense =====
-function deleteExpense(id) {
+async function deleteExpense(id) {
     if (confirm('Are you sure you want to delete this expense?')) {
         expenses = expenses.filter(e => e.id !== id);
         saveExpenses();
+
+        if (isCloudEnabled) {
+            postToCloud('deleteExpense', { id });
+        }
+
         renderExpenses();
         updateStats();
         renderCharts();
@@ -879,7 +1016,7 @@ function deleteExpense(id) {
     }
 }
 
-function handleDeleteAll() {
+async function handleDeleteAll() {
     if (expenses.length === 0) {
         alert('No expenses to delete!');
         return;
@@ -888,6 +1025,11 @@ function handleDeleteAll() {
     if (confirm('Are you sure you want to delete ALL expenses? This cannot be undone!')) {
         expenses = [];
         saveExpenses();
+
+        if (isCloudEnabled) {
+            postToCloud('deleteAllExpenses', {});
+        }
+
         renderExpenses();
         updateStats();
         renderCharts();
@@ -909,8 +1051,8 @@ function exportToCSV() {
             e.date,
             `"${e.category}"`,
             `"${e.subcategory}"`,
-            e.amount.toFixed(2),
-            settings.currency,
+            parseFloat(e.amount).toFixed(2),
+            e.currency || settings.currency,
             `"${(e.description || '').replace(/"/g, '""')}"`
         ].join(','))
     ].join('\n');
@@ -927,20 +1069,16 @@ function updateStats() {
     const today = new Date().toISOString().split('T')[0];
     const currentMonth = today.substring(0, 7);
 
-    // Today's total
     const todayExpenses = expenses.filter(e => e.date === today);
-    const todaySum = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const todaySum = todayExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     todayTotal.textContent = formatCurrency(todaySum);
 
-    // This month's total
     const monthExpenses = expenses.filter(e => e.date.startsWith(currentMonth));
-    const monthSum = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     monthTotal.textContent = formatCurrency(monthSum);
 
-    // Total entries
     totalEntries.textContent = expenses.length;
 
-    // Budget status
     if (settings.monthlyBudget > 0) {
         const percentage = (monthSum / settings.monthlyBudget) * 100;
         const remaining = settings.monthlyBudget - monthSum;
@@ -991,13 +1129,19 @@ function saveExpenses() {
 
 function saveCategories() {
     localStorage.setItem('categories', JSON.stringify(categories));
+    if (isCloudEnabled) {
+        postToCloud('saveCategories', { categories });
+    }
 }
 
 function saveSettings() {
     localStorage.setItem('settings', JSON.stringify(settings));
+    if (isCloudEnabled) {
+        postToCloud('saveSettings', { settings });
+    }
 }
 
-// Make functions globally available for inline event handlers
+// Make functions globally available
 window.openEditModal = openEditModal;
 window.deleteExpense = deleteExpense;
 window.deleteCategory = deleteCategory;
