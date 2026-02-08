@@ -42,7 +42,8 @@ let settings = JSON.parse(localStorage.getItem('settings')) || {
     currency: 'USD',
     monthlyBudget: 0,
     warningThreshold: 80,
-    enableNotifications: true
+    enableNotifications: true,
+    theme: 'dark'
 };
 
 // Sync status
@@ -76,6 +77,7 @@ const currencySelect = document.getElementById('currency-select');
 const amountCurrency = document.getElementById('amount-currency');
 const syncStatus = document.getElementById('sync-status');
 const syncBtn = document.getElementById('sync-btn');
+const themeSelect = document.getElementById('theme-select');
 
 // Filter elements
 const filterDateFrom = document.getElementById('filter-date-from');
@@ -271,6 +273,9 @@ async function init() {
     currencySelect.value = settings.currency;
     updateCurrencyDisplay();
 
+    // Initialize theme
+    setTheme(settings.theme || 'dark');
+
     // Populate category dropdowns
     populateCategoryDropdowns();
 
@@ -310,6 +315,11 @@ function setupEventListeners() {
 
     // Currency change
     currencySelect.addEventListener('change', handleCurrencyChange);
+
+    // Theme change
+    if (themeSelect) {
+        themeSelect.addEventListener('change', handleThemeChange);
+    }
 
     // Filter changes
     filterDateFrom.addEventListener('change', renderExpenses);
@@ -401,6 +411,25 @@ function handleCurrencyChange() {
     renderExpenses();
     updateStats();
     renderCharts();
+}
+
+// ===== Theme Management =====
+function setTheme(themeName) {
+    if (themeName === 'dark') {
+        document.documentElement.removeAttribute('data-theme');
+    } else {
+        document.documentElement.setAttribute('data-theme', themeName);
+    }
+    settings.theme = themeName;
+    if (themeSelect) {
+        themeSelect.value = themeName;
+    }
+}
+
+function handleThemeChange() {
+    const theme = themeSelect.value;
+    setTheme(theme);
+    saveSettings();
 }
 
 function updateCurrencyDisplay() {
