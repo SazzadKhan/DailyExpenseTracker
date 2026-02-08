@@ -955,6 +955,12 @@ function renderExpenses() {
 
     expenseTbody.innerHTML = '';
 
+    // Also render mobile cards
+    const expenseCardsContainer = document.getElementById('expense-cards');
+    if (expenseCardsContainer) {
+        expenseCardsContainer.innerHTML = '';
+    }
+
     if (filtered.length === 0) {
         emptyState.classList.add('visible');
         document.querySelector('.expense-table').style.display = 'none';
@@ -963,8 +969,15 @@ function renderExpenses() {
         document.querySelector('.expense-table').style.display = 'table';
 
         filtered.forEach(expense => {
+            // Create table row for desktop
             const row = createExpenseRow(expense);
             expenseTbody.appendChild(row);
+
+            // Create card for mobile
+            if (expenseCardsContainer) {
+                const card = createExpenseCard(expense);
+                expenseCardsContainer.appendChild(card);
+            }
         });
     }
 
@@ -977,7 +990,7 @@ function createExpenseRow(expense) {
     const categoryData = categories[expense.category] || { icon: '📋' };
     tr.innerHTML = `
         <td>${formatDate(expense.date)}</td>
-        <td><span class="category-badge">${categoryData.icon} ${expense.category}</span></td>
+        <td><span class="category-badge" data-category="${expense.category}">${categoryData.icon} ${expense.category}</span></td>
         <td class="subcategory-text">${expense.subcategory}</td>
         <td>${formatCurrency(parseFloat(expense.amount))}</td>
         <td class="description-text" title="${expense.description || '-'}">${expense.description || '-'}</td>
@@ -987,6 +1000,33 @@ function createExpenseRow(expense) {
         </td>
     `;
     return tr;
+}
+
+function createExpenseCard(expense) {
+    const card = document.createElement('div');
+    card.className = 'expense-card';
+    const categoryData = categories[expense.category] || { icon: '📋' };
+
+    card.innerHTML = `
+        <div class="expense-card-header">
+            <div class="expense-card-category">
+                <span class="category-badge" data-category="${expense.category}">${categoryData.icon} ${expense.category}</span>
+                <span class="expense-card-subcategory">${expense.subcategory}</span>
+            </div>
+            <span class="expense-card-amount">${formatCurrency(parseFloat(expense.amount))}</span>
+        </div>
+        <div class="expense-card-body">
+            <div class="expense-card-info">
+                <span class="expense-card-date">📅 ${formatDate(expense.date)}</span>
+                ${expense.description ? `<span class="expense-card-description">📝 ${expense.description}</span>` : ''}
+            </div>
+            <div class="expense-card-actions">
+                <button class="btn-card-edit" onclick="openEditModal('${expense.id}')">Edit</button>
+                <button class="btn-card-delete" onclick="deleteExpense('${expense.id}')">🗑️</button>
+            </div>
+        </div>
+    `;
+    return card;
 }
 
 // ===== Filtering =====
