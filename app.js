@@ -603,7 +603,36 @@ async function saveBudgetSettings() {
     updateStats();
     checkBudgetAlert();
 
-    alert('Budget settings saved!');
+    showToast('Budget settings saved!', 'success');
+}
+
+// ===== Toast Notification =====
+function showToast(message, type = 'info') {
+    // Remove existing toast if any
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) {
+        existingToast.remove();
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    toast.innerHTML = `
+        <span class="toast-icon">${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span>
+        <span class="toast-message">${message}</span>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(() => {
+        toast.classList.add('toast-visible');
+    });
+
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('toast-visible');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
 // ===== Budget Alert =====
@@ -1246,7 +1275,9 @@ function parseCSVLine(line) {
 
 // ===== Statistics =====
 function updateStats() {
-    const today = new Date().toISOString().split('T')[0];
+    // Use local date instead of UTC to correctly match today's expenses
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const currentMonth = today.substring(0, 7);
 
     const todayExpenses = expenses.filter(e => e.date === today);
