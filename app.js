@@ -1075,11 +1075,29 @@ function exportToCSV() {
         ].join(','))
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Add BOM for Excel compatibility
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+    const filename = `expenses_${new Date().toISOString().split('T')[0]}.csv`;
+
+    // Create and trigger download
     const link = document.createElement('a');
+    link.style.display = 'none';
     link.href = URL.createObjectURL(blob);
-    link.download = `expenses_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = filename;
+
+    // Append to body, click, and remove
+    document.body.appendChild(link);
     link.click();
+
+    // Cleanup after a short delay
+    setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+    }, 100);
+
+    alert(`Exported ${expenses.length} expenses to ${filename}`);
 }
 
 // ===== Import from CSV =====
