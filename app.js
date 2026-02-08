@@ -7,7 +7,7 @@ const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
 // ========================================
 
 // Check if Google Sheets is configured
-const isCloudEnabled = GOOGLE_SCRIPT_URL !== '1bYVy9PzFf-mOjS9MA48I-1Znw3tyeGz8HaAIP5pievsloSCbc88MpprI' && GOOGLE_SCRIPT_URL.length > 0;
+const isCloudEnabled = GOOGLE_SCRIPT_URL !== 'https://script.google.com/macros/s/AKfycbxZT8-21_QCOuWISroIXkK9rWkQDjiHKrJ5ATYrYN-SZpMTXpl2bff2bHju0u5KZVNw/exec' && GOOGLE_SCRIPT_URL.length > 0;
 
 // Default categories and subcategories
 const defaultCategories = {
