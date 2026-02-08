@@ -82,152 +82,162 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Input Form -->
-            <section class="input-section">
-                <h2 class="section-title">
-                    <span class="title-icon">➕</span>
-                    Add New Expense
-                </h2>
-                <form id="expense-form" class="expense-form">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="expense-date">Date</label>
-                            <input type="date" id="expense-date" required>
+            <!-- Add Page (Input Form) -->
+            <div class="nav-page" data-page="add">
+                <section class="input-section">
+                    <h2 class="section-title">
+                        <span class="title-icon">➕</span>
+                        Add New Expense
+                    </h2>
+                    <form id="expense-form" class="expense-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="expense-date">Date</label>
+                                <input type="date" id="expense-date" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="expense-category">Category</label>
+                                <select id="expense-category" required>
+                                    <!-- Categories populated by JS -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="expense-subcategory">Subcategory</label>
+                                <select id="expense-subcategory" required>
+                                    <option value="">Select Subcategory</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="expense-category">Category</label>
-                            <select id="expense-category" required>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="expense-amount">Amount <span id="amount-currency">($)</span></label>
+                                <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00"
+                                    required>
+                            </div>
+                            <div class="form-group form-group-wide">
+                                <label for="expense-description">Description / Note</label>
+                                <input type="text" id="expense-description" placeholder="Enter description or note..."
+                                    maxlength="200">
+                            </div>
+                            <div class="form-group form-group-button">
+                                <button type="submit" class="btn-add">
+                                    <span class="btn-icon">+</span>
+                                    Add Expense
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+            </div>
+
+            <!-- Dashboard Page (Charts) - Active by default -->
+            <div class="nav-page active" data-page="dashboard">
+                <section class="charts-section">
+                    <div class="charts-header">
+                        <h2 class="section-title">
+                            <span class="title-icon">📈</span>
+                            Expense Analytics
+                        </h2>
+                        <div class="chart-tabs">
+                            <button class="chart-tab active" data-chart="category">By Category</button>
+                            <button class="chart-tab" data-chart="daily">Daily Trend</button>
+                            <button class="chart-tab" data-chart="monthly">Monthly Trend</button>
+                        </div>
+                    </div>
+                    <div class="charts-container">
+                        <div class="chart-wrapper" id="category-chart-wrapper">
+                            <canvas id="category-chart"></canvas>
+                        </div>
+                        <div class="chart-wrapper hidden" id="daily-chart-wrapper">
+                            <canvas id="daily-chart"></canvas>
+                        </div>
+                        <div class="chart-wrapper hidden" id="monthly-chart-wrapper">
+                            <canvas id="monthly-chart"></canvas>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- History Page (Filter + Table) -->
+            <div class="nav-page" data-page="history">
+                <!-- Filter Section -->
+                <section class="filter-section">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label for="filter-date-from">From</label>
+                            <input type="date" id="filter-date-from">
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-date-to">To</label>
+                            <input type="date" id="filter-date-to">
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-category">Category</label>
+                            <select id="filter-category">
                                 <!-- Categories populated by JS -->
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="expense-subcategory">Subcategory</label>
-                            <select id="expense-subcategory" required>
-                                <option value="">Select Subcategory</option>
-                            </select>
+                        <div class="filter-group">
+                            <label for="filter-search">Search</label>
+                            <input type="text" id="filter-search" placeholder="Search descriptions...">
                         </div>
+                        <button class="btn-clear-filter" id="clear-filters">Clear Filters</button>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="expense-amount">Amount <span id="amount-currency">($)</span></label>
-                            <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00" required>
-                        </div>
-                        <div class="form-group form-group-wide">
-                            <label for="expense-description">Description / Note</label>
-                            <input type="text" id="expense-description" placeholder="Enter description or note..."
-                                maxlength="200">
-                        </div>
-                        <div class="form-group form-group-button">
-                            <button type="submit" class="btn-add">
-                                <span class="btn-icon">+</span>
-                                Add Expense
+                </section>
+
+                <!-- Expense Table -->
+                <section class="table-section">
+                    <div class="table-header">
+                        <h2 class="section-title">
+                            <span class="title-icon">📊</span>
+                            Expense Records
+                        </h2>
+                        <div class="table-actions">
+                            <input type="file" id="import-csv-input" accept=".csv" style="display: none;">
+                            <button class="btn-import" id="import-csv">
+                                📤 Import CSV
+                            </button>
+                            <button class="btn-export" id="export-csv">
+                                📥 Export CSV
+                            </button>
+                            <button class="btn-delete-all" id="delete-all">
+                                🗑️ Delete All
                             </button>
                         </div>
                     </div>
-                </form>
-            </section>
-
-            <!-- Charts Section -->
-            <section class="charts-section">
-                <div class="charts-header">
-                    <h2 class="section-title">
-                        <span class="title-icon">📈</span>
-                        Expense Analytics
-                    </h2>
-                    <div class="chart-tabs">
-                        <button class="chart-tab active" data-chart="category">By Category</button>
-                        <button class="chart-tab" data-chart="daily">Daily Trend</button>
-                        <button class="chart-tab" data-chart="monthly">Monthly Trend</button>
+                    <div class="table-container">
+                        <table class="expense-table" id="expense-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-sort="date">Date <span class="sort-icon">↕</span></th>
+                                    <th class="sortable" data-sort="category">Category <span class="sort-icon">↕</span>
+                                    </th>
+                                    <th class="sortable" data-sort="subcategory">Subcategory <span
+                                            class="sort-icon">↕</span></th>
+                                    <th class="sortable" data-sort="amount">Amount <span class="sort-icon">↕</span>
+                                    </th>
+                                    <th>Description / Note</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expense-tbody">
+                                <!-- Expense rows will be inserted here -->
+                            </tbody>
+                        </table>
+                        <div class="empty-state" id="empty-state">
+                            <div class="empty-icon">📝</div>
+                            <h3>No expenses recorded yet</h3>
+                            <p>Start tracking your expenses by adding your first entry above!</p>
+                        </div>
                     </div>
-                </div>
-                <div class="charts-container">
-                    <div class="chart-wrapper" id="category-chart-wrapper">
-                        <canvas id="category-chart"></canvas>
+                    <div class="table-footer">
+                        <div class="filtered-total">
+                            <span>Filtered Total:</span>
+                            <strong id="filtered-total">$0.00</strong>
+                        </div>
                     </div>
-                    <div class="chart-wrapper hidden" id="daily-chart-wrapper">
-                        <canvas id="daily-chart"></canvas>
-                    </div>
-                    <div class="chart-wrapper hidden" id="monthly-chart-wrapper">
-                        <canvas id="monthly-chart"></canvas>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Filter Section -->
-            <section class="filter-section">
-                <div class="filter-row">
-                    <div class="filter-group">
-                        <label for="filter-date-from">From</label>
-                        <input type="date" id="filter-date-from">
-                    </div>
-                    <div class="filter-group">
-                        <label for="filter-date-to">To</label>
-                        <input type="date" id="filter-date-to">
-                    </div>
-                    <div class="filter-group">
-                        <label for="filter-category">Category</label>
-                        <select id="filter-category">
-                            <!-- Categories populated by JS -->
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label for="filter-search">Search</label>
-                        <input type="text" id="filter-search" placeholder="Search descriptions...">
-                    </div>
-                    <button class="btn-clear-filter" id="clear-filters">Clear Filters</button>
-                </div>
-            </section>
-
-            <!-- Expense Table -->
-            <section class="table-section">
-                <div class="table-header">
-                    <h2 class="section-title">
-                        <span class="title-icon">📊</span>
-                        Expense Records
-                    </h2>
-                    <div class="table-actions">
-                        <input type="file" id="import-csv-input" accept=".csv" style="display: none;">
-                        <button class="btn-import" id="import-csv">
-                            📤 Import CSV
-                        </button>
-                        <button class="btn-export" id="export-csv">
-                            📥 Export CSV
-                        </button>
-                        <button class="btn-delete-all" id="delete-all">
-                            🗑️ Delete All
-                        </button>
-                    </div>
-                </div>
-                <div class="table-container">
-                    <table class="expense-table" id="expense-table">
-                        <thead>
-                            <tr>
-                                <th class="sortable" data-sort="date">Date <span class="sort-icon">↕</span></th>
-                                <th class="sortable" data-sort="category">Category <span class="sort-icon">↕</span></th>
-                                <th class="sortable" data-sort="subcategory">Subcategory <span
-                                        class="sort-icon">↕</span></th>
-                                <th class="sortable" data-sort="amount">Amount <span class="sort-icon">↕</span></th>
-                                <th>Description / Note</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="expense-tbody">
-                            <!-- Expense rows will be inserted here -->
-                        </tbody>
-                    </table>
-                    <div class="empty-state" id="empty-state">
-                        <div class="empty-icon">📝</div>
-                        <h3>No expenses recorded yet</h3>
-                        <p>Start tracking your expenses by adding your first entry above!</p>
-                    </div>
-                </div>
-                <div class="table-footer">
-                    <div class="filtered-total">
-                        <span>Filtered Total:</span>
-                        <strong id="filtered-total">$0.00</strong>
-                    </div>
-                </div>
-            </section>
+                </section>
+            </div>
         </main>
 
         <!-- Footer -->
@@ -355,6 +365,26 @@
             </div>
         </div>
     </div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav" id="bottom-nav">
+        <button class="nav-item active" data-page="dashboard">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Dashboard</span>
+        </button>
+        <button class="nav-item" data-page="add">
+            <span class="nav-icon">➕</span>
+            <span class="nav-label">Add</span>
+        </button>
+        <button class="nav-item" data-page="history">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">History</span>
+        </button>
+        <button class="nav-item" data-page="settings">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">Settings</span>
+        </button>
+    </nav>
 
     <script src="app.js"></script>
 </body>

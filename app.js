@@ -348,6 +348,14 @@ function setupEventListeners() {
         if (e.target === settingsModal) closeSettingsModal();
     });
 
+    // Bottom Navigation (Mobile)
+    const bottomNav = document.getElementById('bottom-nav');
+    if (bottomNav) {
+        bottomNav.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => handleNavigation(item.dataset.page));
+        });
+    }
+
     // Settings Tabs
     document.querySelectorAll('.settings-tab').forEach(tab => {
         tab.addEventListener('click', () => switchSettingsTab(tab.dataset.tab));
@@ -430,6 +438,31 @@ function handleThemeChange() {
     const theme = themeSelect.value;
     setTheme(theme);
     saveSettings();
+}
+
+// ===== Mobile Navigation =====
+function handleNavigation(page) {
+    // Update active nav item
+    const bottomNav = document.getElementById('bottom-nav');
+    if (bottomNav) {
+        bottomNav.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.page === page);
+        });
+    }
+
+    // Handle special pages
+    if (page === 'settings') {
+        openSettingsModal();
+        return;
+    }
+
+    // Show/hide page sections
+    document.querySelectorAll('.nav-page').forEach(section => {
+        section.classList.toggle('active', section.dataset.page === page);
+    });
+
+    // Scroll to top when switching pages
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function updateCurrencyDisplay() {

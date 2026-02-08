@@ -1556,3 +1556,89 @@ body {
 .toast-message {
     flex: 1;
 }
+
+/* ===== Mobile Bottom Navigation ===== */
+.bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    padding: 8px 0;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 1000;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.bottom-nav .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: inherit;
+}
+
+.bottom-nav .nav-item:hover,
+.bottom-nav .nav-item:focus {
+    color: var(--text-secondary);
+}
+
+.bottom-nav .nav-item.active {
+    color: var(--primary);
+}
+
+.bottom-nav .nav-item.active .nav-icon {
+    transform: scale(1.1);
+}
+
+.bottom-nav .nav-icon {
+    font-size: 1.4rem;
+    transition: transform 0.2s ease;
+}
+
+.bottom-nav .nav-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+/* Show bottom nav on mobile only */
+@media (max-width: 768px) {
+    .bottom-nav {
+        display: flex;
+    }
+
+    /* Add padding to body to prevent content from being hidden behind nav */
+    .app-container {
+        padding-bottom: 80px;
+    }
+
+    /* Hide header settings button on mobile (use bottom nav instead) */
+    .btn-settings {
+        display: none;
+    }
+}
+
+/* ===== Mobile Page Sections ===== */
+.nav-page {
+    display: none;
+}
+
+.nav-page.active {
+    display: block;
+}
+
+/* On desktop, show all sections (no page switching) */
+@media (min-width: 769px) {
+    .nav-page {
+        display: block !important;
+    }
+}
