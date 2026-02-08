@@ -169,7 +169,7 @@ async function syncFromCloud() {
     try {
         // Fetch expenses
         const expensesData = await fetchFromCloud('getExpenses');
-        if (expensesData && expensesData.expenses) {
+        if (expensesData && expensesData.expenses && expensesData.expenses.length > 0) {
             expenses = expensesData.expenses;
             localStorage.setItem('expenses', JSON.stringify(expenses));
         }
@@ -179,13 +179,19 @@ async function syncFromCloud() {
         if (settingsData && settingsData.settings && Object.keys(settingsData.settings).length > 0) {
             settings = { ...settings, ...settingsData.settings };
             localStorage.setItem('settings', JSON.stringify(settings));
+        } else {
+            // Cloud is empty - push current settings to cloud
+            postToCloud('saveSettings', { settings });
         }
 
         // Fetch categories
         const categoriesData = await fetchFromCloud('getCategories');
-        if (categoriesData && categoriesData.categories) {
+        if (categoriesData && categoriesData.categories && Object.keys(categoriesData.categories).length > 0) {
             categories = categoriesData.categories;
             localStorage.setItem('categories', JSON.stringify(categories));
+        } else {
+            // Cloud is empty - push current categories to cloud
+            postToCloud('saveCategories', { categories });
         }
 
         lastSyncTime = new Date();
@@ -197,6 +203,7 @@ async function syncFromCloud() {
         updateStats();
         renderCharts();
         loadSettingsForm();
+        renderCategoryList();
 
     } catch (error) {
         console.error('Sync error:', error);
