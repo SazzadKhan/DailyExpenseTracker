@@ -1279,11 +1279,11 @@ function updateStats() {
     const today = getLocalDateString(new Date());
     const currentMonth = today.substring(0, 7);
 
-    const todayExpenses = expenses.filter(e => (e.date || '').split('T')[0] === today);
+    const todayExpenses = expenses.filter(e => getLocalDateString(new Date(e.date)) === today);
     const todaySum = todayExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     todayTotal.textContent = formatCurrency(todaySum);
 
-    const monthExpenses = expenses.filter(e => (e.date || '').split('T')[0].startsWith(currentMonth));
+    const monthExpenses = expenses.filter(e => getLocalDateString(new Date(e.date)).startsWith(currentMonth));
     const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     monthTotal.textContent = formatCurrency(monthSum);
 
