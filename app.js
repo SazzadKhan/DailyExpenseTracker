@@ -263,8 +263,8 @@ function updateSyncStatus(status) {
 
 // ===== Initialization =====
 async function init() {
-    // Set today's date as default
-    const today = new Date().toISOString().split('T')[0];
+    // Set today's date as default (using local timezone)
+    const today = getLocalDateString(new Date());
     expenseDate.value = today;
 
     // Initialize currency
@@ -731,7 +731,7 @@ function renderDailyChart() {
     for (let i = 13; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = getLocalDateString(date);
         days.push(dateStr);
         dailyTotals[dateStr] = 0;
     }
@@ -1276,8 +1276,7 @@ function parseCSVLine(line) {
 // ===== Statistics =====
 function updateStats() {
     // Use local date instead of UTC to correctly match today's expenses
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const today = getLocalDateString(new Date());
     const currentMonth = today.substring(0, 7);
 
     const todayExpenses = expenses.filter(e => e.date === today);
@@ -1332,6 +1331,14 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+// Get local date string in YYYY-MM-DD format (respects user's timezone)
+function getLocalDateString(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 function saveExpenses() {
