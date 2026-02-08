@@ -658,6 +658,7 @@ body {
 }
 
 .btn-export,
+.btn-import,
 .btn-delete-all {
     padding: 9px 18px;
     border: none;
@@ -666,6 +667,16 @@ body {
     font-weight: 500;
     cursor: pointer;
     transition: var(--transition);
+}
+
+.btn-import {
+    background: var(--secondary);
+    color: white;
+    border: 1px solid var(--secondary);
+}
+
+.btn-import:hover {
+    background: var(--secondary-dark);
 }
 
 .btn-export {

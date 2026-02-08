@@ -117,6 +117,8 @@ const addSubcategoryBtn = document.getElementById('add-subcategory');
 
 // Action buttons
 const exportCsvBtn = document.getElementById('export-csv');
+const importCsvBtn = document.getElementById('import-csv');
+const importCsvInput = document.getElementById('import-csv-input');
 const deleteAllBtn = document.getElementById('delete-all');
 
 // Sort state
@@ -355,6 +357,15 @@ function setupEventListeners() {
     // Export and Delete All
     exportCsvBtn.addEventListener('click', exportToCSV);
     deleteAllBtn.addEventListener('click', handleDeleteAll);
+
+    // Import CSV
+    importCsvBtn.addEventListener('click', () => importCsvInput.click());
+    importCsvInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            importFromCSV(e.target.files[0]);
+            e.target.value = ''; // Reset input for re-upload
+        }
+    });
 
     // Sync button
     if (syncBtn) {
@@ -1062,6 +1073,154 @@ function exportToCSV() {
     link.href = URL.createObjectURL(blob);
     link.download = `expenses_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
+}
+
+// ===== Import from CSV =====
+function importFromCSV(file) {
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+        try {
+            const content = e.target.result;
+            const lines = content.split('\n').filter(line => line.trim());
+
+            if (lines.length < 2) {
+                alert('CSV file is empty or has no data rows.');
+                return;
+            }
+
+            // Parse header to determine column positions
+            const header = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+
+            // Find column indices
+            const dateIdx = header.findIndex(h => h === 'date');
+            const categoryIdx = header.findIndex(h => h === 'category');
+            const subcategoryIdx = header.findIndex(h => h === 'subcategory');
+            const amountIdx = header.findIndex(h => h === 'amount');
+            const descriptionIdx = header.findIndex(h => h === 'description' || h === 'notes');
+            const currencyIdx = header.findIndex(h => h === 'currency');
+
+            // Validate required columns
+            if (dateIdx === -1 || categoryIdx === -1 || amountIdx === -1) {
+                alert('CSV must have at least: Date, Category, and Amount columns.');
+                return;
+            }
+
+            // Parse data rows
+            const newExpenses = [];
+            const errors = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+
+                if (values.length < 3) continue; // Skip empty/invalid rows
+
+                const date = values[dateIdx]?.trim();
+                const category = values[categoryIdx]?.trim();
+                const amount = parseFloat(values[amountIdx]?.trim().replace(/[^0-9.-]/g, ''));
+                const subcategory = subcategoryIdx !== -1 ? values[subcategoryIdx]?.trim() : 'Other';
+                const description = descriptionIdx !== -1 ? values[descriptionIdx]?.trim() : '';
+                const currency = currencyIdx !== -1 ? values[currencyIdx]?.trim() : settings.currency;
+
+                // Validate row
+                if (!date || !category || isNaN(amount)) {
+                    errors.push(`Row ${i + 1}: Invalid data`);
+                    continue;
+                }
+
+                // Validate date format (try to parse it)
+                const parsedDate = new Date(date);
+                if (isNaN(parsedDate.getTime())) {
+                    errors.push(`Row ${i + 1}: Invalid date format`);
+                    continue;
+                }
+
+                const formattedDate = parsedDate.toISOString().split('T')[0];
+
+                newExpenses.push({
+                    id: Date.now().toString() + '_' + i,
+                    date: formattedDate,
+                    category: category,
+                    subcategory: subcategory || 'Other',
+                    amount: amount,
+                    description: description,
+                    currency: currency
+                });
+            }
+
+            if (newExpenses.length === 0) {
+                alert('No valid expenses found in CSV file.\n\nErrors:\n' + errors.slice(0, 5).join('\n'));
+                return;
+            }
+
+            // Ask user what to do
+            const action = confirm(
+                `Found ${newExpenses.length} expenses to import.\n\n` +
+                (errors.length > 0 ? `${errors.length} rows had errors.\n\n` : '') +
+                `Click OK to ADD to existing expenses.\n` +
+                `Click Cancel to REPLACE all existing expenses.`
+            );
+
+            if (action) {
+                // Add to existing
+                expenses = [...expenses, ...newExpenses];
+            } else {
+                // Replace all
+                if (confirm('This will DELETE all existing expenses and replace with imported data. Continue?')) {
+                    expenses = newExpenses;
+                } else {
+                    return;
+                }
+            }
+
+            saveExpenses();
+
+            if (isCloudEnabled) {
+                syncToCloud();
+            }
+
+            renderExpenses();
+            updateStats();
+            renderCharts();
+            checkBudgetAlert();
+
+            alert(`Successfully imported ${newExpenses.length} expenses!`);
+
+        } catch (error) {
+            console.error('CSV import error:', error);
+            alert('Failed to parse CSV file. Please check the format.');
+        }
+    };
+
+    reader.readAsText(file);
+}
+
+// Helper function to parse CSV line (handles quoted values)
+function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+
+        if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+                current += '"';
+                i++; // Skip next quote
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            result.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+
+    result.push(current); // Add last value
+    return result.map(v => v.replace(/^"|"$/g, '').trim());
 }
 
 // ===== Statistics =====
