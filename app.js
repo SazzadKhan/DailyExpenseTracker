@@ -1063,41 +1063,37 @@ function exportToCSV() {
     }
 
     const headers = ['Date', 'Category', 'Subcategory', 'Amount', 'Currency', 'Description'];
-    const csvContent = [
-        headers.join(','),
-        ...expenses.map(e => [
+    const csvRows = [headers.join(',')];
+
+    expenses.forEach(e => {
+        const row = [
             e.date,
-            `"${e.category}"`,
-            `"${e.subcategory}"`,
+            `"${(e.category || '').replace(/"/g, '""')}"`,
+            `"${(e.subcategory || '').replace(/"/g, '""')}"`,
             parseFloat(e.amount).toFixed(2),
             e.currency || settings.currency,
             `"${(e.description || '').replace(/"/g, '""')}"`
-        ].join(','))
-    ].join('\n');
+        ];
+        csvRows.push(row.join(','));
+    });
 
-    // Add BOM for Excel compatibility
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-
+    const csvContent = csvRows.join('\r\n');
     const filename = `expenses_${new Date().toISOString().split('T')[0]}.csv`;
 
-    // Create and trigger download
-    const link = document.createElement('a');
-    link.style.display = 'none';
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
+    // Use data URI approach for better filename support
+    const encodedContent = encodeURIComponent(csvContent);
+    const dataUri = 'data:text/csv;charset=utf-8,' + encodedContent;
 
-    // Append to body, click, and remove
+    const link = document.createElement('a');
+    link.setAttribute('href', dataUri);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+
     document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
 
-    // Cleanup after a short delay
-    setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-    }, 100);
-
-    alert(`Exported ${expenses.length} expenses to ${filename}`);
+    console.log(`Exported ${expenses.length} expenses to ${filename}`);
 }
 
 // ===== Import from CSV =====
