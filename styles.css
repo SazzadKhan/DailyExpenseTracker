@@ -1,3 +1,9 @@
+/* ===== Fonts ===== */
+@font-face {
+    font-family: "Twemoji Country Flags";
+    src: url("https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1/dist/TwemojiCountryFlags.woff2") format("woff2");
+}
+
 /* ===== CSS Variables & Reset ===== */
 :root {
     --primary: #6366f1;
@@ -132,7 +138,7 @@
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', "Twemoji Country Flags", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg-dark);
     color: var(--text-primary);
     line-height: 1.6;
@@ -173,7 +179,7 @@ body {
 
 .header-content {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     flex-wrap: wrap;
     gap: 15px;
@@ -203,6 +209,8 @@ body {
 .header-controls {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 15px;
 }
 
@@ -234,6 +242,8 @@ body {
     background: var(--bg-card);
     color: var(--text-primary);
 }
+
+
 
 .theme-selector {
     display: flex;
@@ -344,6 +354,7 @@ body {
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
+    justify-content: center;
     position: relative;
     z-index: 1;
 }
@@ -730,6 +741,85 @@ body {
     border-color: var(--primary);
 }
 
+.btn-danger-outline {
+    width: 100%;
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    padding: 12px;
+    border-radius: var(--radius-s);
+    font-weight: 500;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+/* Settings Action List */
+.settings-actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-setting-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    border-radius: var(--radius-s);
+    color: var(--text-main);
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-setting-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(2px);
+}
+
+.btn-setting-item.danger {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.btn-setting-item.danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.btn-setting-item.danger .setting-title {
+    color: var(--danger);
+}
+
+.setting-icon {
+    font-size: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+}
+
+.setting-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.setting-title {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.setting-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
 .btn-clear-filter {
     padding: 9px 18px;
     background: transparent;
@@ -824,6 +914,11 @@ body {
     overflow-x: auto;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
+}
+
+.expense-table.table-empty,
+.expense-cards.table-empty {
+    display: none !important;
 }
 
 .expense-table {
@@ -1018,7 +1113,7 @@ body {
     bottom: 0;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
-    z-index: 1000;
+    z-index: 2000;
     align-items: center;
     justify-content: center;
     padding: 20px;
@@ -1706,87 +1801,109 @@ body {
 }
 
 /* ===== Mobile Expense Cards ===== */
+/* Cards hidden by default (desktop), shown on mobile */
 .expense-cards {
     display: none;
-    flex-direction: column;
-    gap: 12px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
 }
 
 .expense-card {
     background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    padding: 16px;
+    border-radius: 12px;
     border: 1px solid var(--border);
-    transition: var(--transition);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    overflow: hidden;
 }
 
-.expense-card:hover {
+.expense-card.active {
     border-color: var(--primary);
-    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px var(--primary), 0 4px 12px rgba(99, 102, 241, 0.15);
 }
 
-.expense-card-header {
+/* Main content row: icon | title+meta | amount */
+.expense-card-main {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 12px;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
 }
 
-.expense-card-category {
+.expense-card-left {
+    flex-shrink: 0;
+}
+
+.expense-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 1.1rem;
+}
+
+.expense-card-center {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
 }
 
-.expense-card-subcategory {
-    font-size: 0.8rem;
+.expense-card-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.expense-card-meta {
+    font-size: 0.75rem;
     color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .expense-card-amount {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
     color: var(--text-primary);
-}
-
-.expense-card-body {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.expense-card-info {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.expense-card-date {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.expense-card-description {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
+/* Actions — hidden by default, slide in when card is active */
 .expense-card-actions {
     display: flex;
     gap: 8px;
+    padding: 0 16px;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.25s ease;
+    justify-content: flex-end;
+}
+
+.expense-card.active .expense-card-actions {
+    max-height: 50px;
+    opacity: 1;
+    padding: 0 16px 12px;
 }
 
 .expense-card-actions button {
-    padding: 8px 12px;
-    border-radius: var(--radius-md);
+    padding: 6px 14px;
+    border-radius: 8px;
     border: none;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 500;
     cursor: pointer;
-    transition: var(--transition);
+    transition: all 0.15s ease;
 }
 
 .btn-card-edit {
@@ -1795,26 +1912,121 @@ body {
 }
 
 .btn-card-edit:hover {
-    filter: brightness(1.1);
+    filter: brightness(1.15);
 }
 
 .btn-card-delete {
-    background: rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.12);
     color: #ef4444;
 }
 
 .btn-card-delete:hover {
-    background: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.25);
 }
 
-/* Show cards on mobile, hide table */
+/* Category-specific icon backgrounds */
+.expense-card-main[data-category="Food & Dining"] .expense-card-icon {
+    background: rgba(249, 115, 22, 0.15);
+}
+
+.expense-card-main[data-category="Transportation"] .expense-card-icon {
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.expense-card-main[data-category="Shopping"] .expense-card-icon {
+    background: rgba(236, 72, 153, 0.15);
+}
+
+.expense-card-main[data-category="Entertainment"] .expense-card-icon {
+    background: rgba(168, 85, 247, 0.15);
+}
+
+.expense-card-main[data-category="Bills & Utilities"] .expense-card-icon {
+    background: rgba(34, 197, 94, 0.15);
+}
+
+.expense-card-main[data-category="Healthcare"] .expense-card-icon {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.expense-card-main[data-category="Education"] .expense-card-icon {
+    background: rgba(6, 182, 212, 0.15);
+}
+
+.expense-card-main[data-category="Personal Care"] .expense-card-icon {
+    background: rgba(244, 114, 182, 0.15);
+}
+
+.expense-card-main[data-category="Travel"] .expense-card-icon {
+    background: rgba(251, 191, 36, 0.15);
+}
+
+.expense-card-main[data-category="Other"] .expense-card-icon {
+    background: rgba(156, 163, 175, 0.15);
+}
+
+/* Responsive card grid */
+@media (max-width: 1024px) {
+    .expense-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 @media (max-width: 768px) {
     .expense-cards {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 6px;
     }
 
-    .table-container table {
+    .table-container {
+        overflow-x: hidden;
+        border: none;
+    }
+
+    .table-container table.expense-table {
         display: none;
+    }
+
+    .expense-card {
+        border-radius: 10px;
+    }
+
+    .expense-card-main {
+        padding: 10px 12px;
+        gap: 10px;
+    }
+
+    .expense-card-icon {
+        width: 34px;
+        height: 34px;
+        font-size: 1rem;
+        border-radius: 8px;
+    }
+
+    .expense-card-title {
+        font-size: 0.82rem;
+    }
+
+    .expense-card-meta {
+        font-size: 0.7rem;
+    }
+
+    .expense-card-amount {
+        font-size: 0.9rem;
+    }
+
+    .expense-card.active .expense-card-actions {
+        padding: 0 12px 10px;
+    }
+
+    .expense-card-actions button {
+        padding: 5px 12px;
+        font-size: 0.72rem;
+    }
+
+    .table-section {
+        padding: 15px;
     }
 
     .table-header h2 {

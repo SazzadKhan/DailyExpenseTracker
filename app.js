@@ -273,6 +273,11 @@ async function init() {
     currencySelect.value = settings.currency;
     updateCurrencyDisplay();
 
+    // Apply flag emoji polyfill for Windows
+    if (typeof countryFlagEmojiPolyfill !== 'undefined') {
+        countryFlagEmojiPolyfill.polyfillCountryFlagEmojis();
+    }
+
     // Initialize theme
     setTheme(settings.theme || 'dark');
 
@@ -728,6 +733,11 @@ function switchChartTab(chart) {
 
     document.querySelectorAll('.chart-wrapper').forEach(w => w.classList.add('hidden'));
     document.getElementById(`${chart}-chart-wrapper`).classList.remove('hidden');
+
+    // Re-render the chart to ensure correct dimensions
+    if (chart === 'category') renderCategoryChart();
+    if (chart === 'daily') renderDailyChart();
+    if (chart === 'monthly') renderMonthlyChart();
 }
 
 function renderCharts() {
@@ -788,27 +798,33 @@ function renderDailyChart() {
     const ctx = document.getElementById('daily-chart').getContext('2d');
 
     const days = [];
-    const dailyTotals = {};
+    const today = new Date();
+    // Normalize to local midnight to avoid timezone shifts during iteration
+    today.setHours(0, 0, 0, 0);
 
     for (let i = 13; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = getLocalDateString(date);
-        days.push(dateStr);
-        dailyTotals[dateStr] = 0;
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        days.push(getLocalDateString(d));
     }
 
+    // Initialize data array with 0s
+    const data = new Array(days.length).fill(0);
+
+    // Sum expenses by matching date string directly
     expenses.forEach(exp => {
-        if (dailyTotals.hasOwnProperty(exp.date)) {
-            dailyTotals[exp.date] += parseFloat(exp.amount);
+        const idx = days.indexOf(exp.date);
+        if (idx !== -1) {
+            data[idx] += parseFloat(exp.amount) || 0;
         }
     });
 
     const labels = days.map(d => {
-        const date = new Date(d);
+        // Manually parse YYYY-MM-DD for display label
+        const [y, m, day] = d.split('-').map(Number);
+        const date = new Date(y, m - 1, day);
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     });
-    const data = days.map(d => dailyTotals[d]);
 
     if (dailyChart) dailyChart.destroy();
 
@@ -822,7 +838,8 @@ function renderDailyChart() {
                 backgroundColor: 'rgba(99, 102, 241, 0.6)',
                 borderColor: '#6366f1',
                 borderWidth: 2,
-                borderRadius: 6
+                borderRadius: 6,
+                barPercentage: 0.6
             }]
         },
         options: {
@@ -833,8 +850,12 @@ function renderDailyChart() {
                 tooltip: { callbacks: { label: (context) => formatCurrency(context.raw) } }
             },
             scales: {
-                x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
-                y: { ticks: { color: '#94a3b8', callback: (value) => formatCurrency(value) }, grid: { color: '#334155' } }
+                x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#94a3b8', callback: (value) => formatCurrency(value) },
+                    grid: { color: '#334155' }
+                }
             }
         }
     });
@@ -845,11 +866,16 @@ function renderMonthlyChart() {
 
     const months = [];
     const monthlyTotals = {};
+    const today = new Date();
+    // Use the 1st of the current month to avoid "31st" edge cases when subtracting months
+    const currentMonthFirst = new Date(today.getFullYear(), today.getMonth(), 1);
 
     for (let i = 5; i >= 0; i--) {
-        const date = new Date();
-        date.setMonth(date.getMonth() - i);
-        const monthStr = date.toISOString().substring(0, 7);
+        const d = new Date(currentMonthFirst);
+        d.setMonth(d.getMonth() - i);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const monthStr = `${year}-${month}`;
         months.push(monthStr);
         monthlyTotals[monthStr] = 0;
     }
@@ -963,10 +989,12 @@ function renderExpenses() {
 
     if (filtered.length === 0) {
         emptyState.classList.add('visible');
-        document.querySelector('.expense-table').style.display = 'none';
+        document.querySelector('.expense-table').classList.add('table-empty');
+        if (expenseCardsContainer) expenseCardsContainer.classList.add('table-empty');
     } else {
         emptyState.classList.remove('visible');
-        document.querySelector('.expense-table').style.display = 'table';
+        document.querySelector('.expense-table').classList.remove('table-empty');
+        if (expenseCardsContainer) expenseCardsContainer.classList.remove('table-empty');
 
         filtered.forEach(expense => {
             // Create table row for desktop
@@ -1005,27 +1033,37 @@ function createExpenseRow(expense) {
 function createExpenseCard(expense) {
     const card = document.createElement('div');
     card.className = 'expense-card';
+    card.dataset.id = expense.id;
     const categoryData = categories[expense.category] || { icon: '📋' };
 
     card.innerHTML = `
-        <div class="expense-card-header">
-            <div class="expense-card-category">
-                <span class="category-badge" data-category="${expense.category}">${categoryData.icon} ${expense.category}</span>
-                <span class="expense-card-subcategory">${expense.subcategory}</span>
+        <div class="expense-card-main" data-category="${expense.category}">
+            <div class="expense-card-left">
+                <span class="expense-card-icon">${categoryData.icon}</span>
+            </div>
+            <div class="expense-card-center">
+                <span class="expense-card-title">${expense.subcategory}</span>
+                <span class="expense-card-meta">${formatDate(expense.date)}${expense.description ? ' · ' + expense.description : ''}</span>
             </div>
             <span class="expense-card-amount">${formatCurrency(parseFloat(expense.amount))}</span>
         </div>
-        <div class="expense-card-body">
-            <div class="expense-card-info">
-                <span class="expense-card-date">📅 ${formatDate(expense.date)}</span>
-                ${expense.description ? `<span class="expense-card-description">📝 ${expense.description}</span>` : ''}
-            </div>
-            <div class="expense-card-actions">
-                <button class="btn-card-edit" onclick="openEditModal('${expense.id}')">Edit</button>
-                <button class="btn-card-delete" onclick="deleteExpense('${expense.id}')">🗑️</button>
-            </div>
+        <div class="expense-card-actions">
+            <button class="btn-card-edit" onclick="event.stopPropagation(); openEditModal('${expense.id}')">✏️ Edit</button>
+            <button class="btn-card-delete" onclick="event.stopPropagation(); deleteExpense('${expense.id}')">🗑️ Delete</button>
         </div>
     `;
+
+    // Tap to select/deselect card
+    card.addEventListener('click', () => {
+        const wasActive = card.classList.contains('active');
+        // Deselect all other cards
+        document.querySelectorAll('.expense-card.active').forEach(c => c.classList.remove('active'));
+        // Toggle this card
+        if (!wasActive) {
+            card.classList.add('active');
+        }
+    });
+
     return card;
 }
 
@@ -1099,7 +1137,7 @@ function sortExpenses(expensesToSort) {
 
 // ===== Edit Expense =====
 function openEditModal(id) {
-    const expense = expenses.find(e => e.id === id);
+    const expense = expenses.find(e => String(e.id) === String(id));
     if (!expense) return;
 
     editId.value = expense.id;
@@ -1121,7 +1159,7 @@ async function handleEditExpense(e) {
     e.preventDefault();
 
     const id = editId.value;
-    const index = expenses.findIndex(e => e.id === id);
+    const index = expenses.findIndex(e => String(e.id) === String(id));
 
     if (index !== -1) {
         expenses[index] = {
@@ -1151,7 +1189,7 @@ async function handleEditExpense(e) {
 // ===== Delete Expense =====
 async function deleteExpense(id) {
     if (confirm('Are you sure you want to delete this expense?')) {
-        expenses = expenses.filter(e => e.id !== id);
+        expenses = expenses.filter(e => String(e.id) !== String(id));
         saveExpenses();
 
         if (isCloudEnabled) {

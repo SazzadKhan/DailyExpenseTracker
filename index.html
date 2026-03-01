@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1/dist/polyfill.umd.js"></script>
 </head>
 
 <body>
@@ -193,16 +194,7 @@
                             Expense Records
                         </h2>
                         <div class="table-actions">
-                            <input type="file" id="import-csv-input" accept=".csv" style="display: none;">
-                            <button class="btn-import" id="import-csv">
-                                📤 Import CSV
-                            </button>
-                            <button class="btn-export" id="export-csv">
-                                📥 Export CSV
-                            </button>
-                            <button class="btn-delete-all" id="delete-all">
-                                🗑️ Delete All
-                            </button>
+                            <!-- Import/Export/Delete buttons moved to settings modal -->
                         </div>
                     </div>
                     <div class="table-container">
@@ -301,6 +293,38 @@
             <div class="settings-tabs">
                 <button class="settings-tab active" data-tab="budget">💰 Budget</button>
                 <button class="settings-tab" data-tab="categories">📁 Categories</button>
+                <button class="settings-tab" data-tab="data">💾 Data</button>
+            </div>
+
+            <!-- Data Tab -->
+            <div class="settings-content hidden" id="data-tab">
+                <div class="settings-group">
+                    <h4>Data Management</h4>
+                    <div class="settings-actions-list">
+                        <button class="btn-setting-item" id="import-csv">
+                            <span class="setting-icon">📥</span>
+                            <div class="setting-info">
+                                <span class="setting-title">Import CSV</span>
+                                <span class="setting-desc">Add expenses from file</span>
+                            </div>
+                        </button>
+                        <button class="btn-setting-item" id="export-csv">
+                            <span class="setting-icon">📤</span>
+                            <div class="setting-info">
+                                <span class="setting-title">Export CSV</span>
+                                <span class="setting-desc">Save data to file</span>
+                            </div>
+                        </button>
+                        <button class="btn-setting-item danger" id="delete-all">
+                            <span class="setting-icon">🗑️</span>
+                            <div class="setting-info">
+                                <span class="setting-title">Reset Data</span>
+                                <span class="setting-desc">Delete all expenses</span>
+                            </div>
+                        </button>
+                    </div>
+                    <input id="import-csv-input" type="file" accept=".csv" style="display: none;">
+                </div>
             </div>
 
             <!-- Budget Tab -->
