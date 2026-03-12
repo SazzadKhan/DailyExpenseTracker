@@ -1364,6 +1364,104 @@ body {
     cursor: not-allowed;
 }
 
+/* ===== Emoji Picker ===== */
+.emoji-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.emoji-selected-display {
+    font-size: 1.6rem;
+    background: var(--bg-input);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: var(--transition);
+    line-height: 1;
+}
+
+.emoji-selected-display:hover {
+    border-color: var(--primary);
+    background: var(--bg-hover);
+}
+
+.emoji-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.emoji-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+    gap: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-top: 4px;
+    animation: fadeIn 0.15s ease;
+}
+
+.emoji-btn {
+    font-size: 1.3rem;
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    padding: 4px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, transform 0.1s;
+    line-height: 1;
+    text-align: center;
+}
+
+.emoji-btn:hover {
+    background: var(--bg-hover);
+    transform: scale(1.2);
+}
+
+.emoji-btn.selected {
+    border-color: var(--primary);
+    background: rgba(99,102,241,0.18);
+}
+
+/* ===== Edit Category Button ===== */
+.btn-edit-category {
+    background: transparent;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+    color: var(--text-muted);
+}
+
+.btn-edit-category:hover {
+    background: rgba(99,102,241,0.15);
+    color: var(--primary-light);
+}
+
+.btn-edit-category:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+}
+
+.category-item .item-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+/* ===== Modal Small ===== */
+.modal-small {
+    max-width: 380px;
+}
+
 /* ===== Footer ===== */
 .footer {
     text-align: center;

@@ -360,8 +360,12 @@
                                 maxlength="30">
                         </div>
                         <div class="form-group">
-                            <label for="new-category-icon">Icon (Emoji)</label>
-                            <input type="text" id="new-category-icon" placeholder="📁" maxlength="2">
+                            <label>Icon</label>
+                            <div class="emoji-picker-wrapper">
+                                <button type="button" class="emoji-selected-display" id="new-category-icon-btn" title="Click to choose icon">📁</button>
+                                <span class="emoji-hint">← Click to pick an icon</span>
+                            </div>
+                            <div class="emoji-picker-grid" id="new-emoji-picker" style="display:none;"></div>
                         </div>
                         <button class="btn-add-category" id="add-category">➕ Add Category</button>
                     </div>
@@ -390,6 +394,32 @@
                         <!-- Subcategories will be populated here -->
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Category Modal -->
+    <div class="modal" id="edit-category-modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>✏️ Edit Category</h3>
+                <button class="modal-close" id="edit-category-close">&times;</button>
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label>Category Name</label>
+                <input type="text" id="edit-category-name" maxlength="30" readonly style="opacity:0.6;cursor:not-allowed;">
+            </div>
+            <div class="form-group">
+                <label>Icon</label>
+                <div class="emoji-picker-wrapper">
+                    <button type="button" class="emoji-selected-display" id="edit-category-icon-btn" title="Click to pick">📁</button>
+                    <span class="emoji-hint">← Click to pick a new icon</span>
+                </div>
+                <div class="emoji-picker-grid" id="edit-emoji-picker" style="display:none;"></div>
+            </div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button type="button" class="btn-cancel" id="edit-category-cancel">Cancel</button>
+                <button type="button" class="btn-save" id="edit-category-save">💾 Save</button>
             </div>
         </div>
     </div>

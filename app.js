@@ -23,6 +23,72 @@ const defaultCategories = {
     'Other': { icon: '📋', subcategories: ['Miscellaneous', 'Charity', 'Gifts Given', 'Fees', 'Other'] }
 };
 
+// ===== Emoji List =====
+const EMOJI_LIST = [
+    // Food & Drink
+    '🍔', '🍕', '🍜', '🍣', '🍱', '🥗', '🍰', '🧁', '☕', '🍺', '🍷', '🥤', '🍿', '🧇', '🥙', '🌮', '🍛', '🥘', '🍲', '🥞',
+    // Transport
+    '🚗', '🚕', '🚌', '🚇', '✈️', '🚁', '🛳️', '🚂', '🛵', '🚲', '🚀', '⛵', '🛺', '🚐', '🚓', '🏎️',
+    // Shopping & Money
+    '🛍️', '💳', '💰', '💵', '💸', '🏷️', '🛒', '👜', '👗', '👟', '👒', '⌚', '💍', '🕶️', '🎒',
+    // Home & Bills
+    '🏠', '💡', '🔌', '📱', '💻', '🖥️', '📺', '🔧', '🛁', '🛏️', '🪑', '🧹', '🪴', '📦', '🔑', '🏗️',
+    // Health & Fitness
+    '🏥', '💊', '🩺', '💉', '🏋️', '🧘', '🚴', '⚕️', '🩹', '🦷', '👓', '🧴', '🛁',
+    // Education
+    '📚', '🎓', '✏️', '📝', '🖊️', '📐', '🧪', '🔬', '🏫', '📖', '🗂️', '📋', '🧑‍💻',
+    // Entertainment
+    '🎬', '🎮', '🎵', '🎸', '🎤', '🎭', '🎨', '🎪', '🎯', '🎳', '🎲', '♟️', '🎻', '🎹', '📷',
+    // Personal Care
+    '💆', '💅', '🪥', '🧖', '💄', '🪒', '🧴', '🪞', '👔', '👕',
+    // Travel & Places
+    '🗺️', '🏖️', '🏕️', '🗼', '🏔️', '🌅', '🏟️', '🌍', '🗽', '🏯', '🎡', '⛺',
+    // Nature
+    '🌿', '🌸', '🌺', '🍀', '🌻', '🍁', '🐾', '🐶', '🐱', '🌈', '⭐', '🌙', '☀️', '❄️',
+    // Work & Office
+    '💼', '📊', '📈', '📉', '🗓️', '🖇️', '📌', '📎', '🗃️', '📁', '📂', '🖨️', '📠', '🔐', '🏢',
+    // Misc / Symbols
+    '🎁', '🎀', '🪙', '⚡', '🔔', '🏆', '🥇', '🎖️', '🛡️', '🔖', '📋', '❓', '💬', '🔄', '♻️'
+];
+
+// ===== Emoji Picker Builder =====
+function buildEmojiPicker(containerEl, displayBtn, getSelected, setSelected) {
+    containerEl.innerHTML = '';
+    const currentSelected = getSelected();
+    EMOJI_LIST.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'emoji-btn' + (emoji === currentSelected ? ' selected' : '');
+        btn.textContent = emoji;
+        btn.title = emoji;
+        btn.addEventListener('click', () => {
+            setSelected(emoji);
+            displayBtn.textContent = emoji;
+            containerEl.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            containerEl.style.display = 'none';
+        });
+        containerEl.appendChild(btn);
+    });
+}
+
+function toggleEmojiPicker(containerEl, displayBtn, getSelected, setSelected) {
+    if (containerEl.style.display === 'none' || containerEl.style.display === '') {
+        buildEmojiPicker(containerEl, displayBtn, getSelected, setSelected);
+        containerEl.style.display = 'grid';
+    } else {
+        containerEl.style.display = 'none';
+    }
+}
+
+// Close emoji pickers when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.emoji-picker-wrapper') && !e.target.closest('.emoji-picker-grid')) {
+        if (newEmojiPickerEl) newEmojiPickerEl.style.display = 'none';
+        if (editEmojiPickerEl) editEmojiPickerEl.style.display = 'none';
+    }
+});
+
 // Currency configurations
 const currencies = {
     'USD': { symbol: '$', code: 'USD', locale: 'en-US' },
@@ -110,12 +176,26 @@ const saveBudgetBtn = document.getElementById('save-budget');
 // Category management elements
 const categoryList = document.getElementById('category-list');
 const newCategoryName = document.getElementById('new-category-name');
-const newCategoryIcon = document.getElementById('new-category-icon');
+const newCategoryIconBtn = document.getElementById('new-category-icon-btn');
+const newEmojiPickerEl = document.getElementById('new-emoji-picker');
 const addCategoryBtn = document.getElementById('add-category');
 const subcategoryCategory = document.getElementById('subcategory-category');
 const subcategoryList = document.getElementById('subcategory-list');
 const newSubcategoryName = document.getElementById('new-subcategory-name');
 const addSubcategoryBtn = document.getElementById('add-subcategory');
+// Edit Category Modal
+const editCategoryModal = document.getElementById('edit-category-modal');
+const editCategoryClose = document.getElementById('edit-category-close');
+const editCategoryCancel = document.getElementById('edit-category-cancel');
+const editCategorySave = document.getElementById('edit-category-save');
+const editCategoryNameInput = document.getElementById('edit-category-name');
+const editCategoryIconBtn = document.getElementById('edit-category-icon-btn');
+const editEmojiPickerEl = document.getElementById('edit-emoji-picker');
+
+// Picker state
+let selectedNewIcon = '📁';
+let selectedEditIcon = '📁';
+let currentEditingCategoryName = null;
 
 // Action buttons
 const exportCsvBtn = document.getElementById('export-csv');
@@ -374,6 +454,30 @@ function setupEventListeners() {
     subcategoryCategory.addEventListener('change', renderSubcategoryList);
     addSubcategoryBtn.addEventListener('click', addNewSubcategory);
 
+    // New-category emoji picker toggle
+    newCategoryIconBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleEmojiPicker(newEmojiPickerEl, newCategoryIconBtn,
+            () => selectedNewIcon,
+            (v) => { selectedNewIcon = v; }
+        );
+    });
+
+    // Edit-category modal controls
+    editCategoryClose.addEventListener('click', closeEditCategoryModal);
+    editCategoryCancel.addEventListener('click', closeEditCategoryModal);
+    editCategorySave.addEventListener('click', saveEditCategory);
+    editCategoryModal.addEventListener('click', (e) => {
+        if (e.target === editCategoryModal) closeEditCategoryModal();
+    });
+    editCategoryIconBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleEmojiPicker(editEmojiPickerEl, editCategoryIconBtn,
+            () => selectedEditIcon,
+            (v) => { selectedEditIcon = v; }
+        );
+    });
+
     // Alert close
     alertClose.addEventListener('click', () => {
         budgetAlert.classList.remove('visible');
@@ -527,16 +631,45 @@ function renderCategoryList() {
 
     Object.entries(categories).forEach(([name, data]) => {
         const isDefault = defaultCategoryNames.includes(name);
+        const safeName = name.replace(/'/g, "\\'");
         const item = document.createElement('div');
         item.className = `category-item ${isDefault ? 'default' : ''}`;
         item.innerHTML = `
             <span>${data.icon} ${name}</span>
-            <button class="btn-delete-category" ${isDefault ? 'disabled title="Cannot delete default category"' : ''} onclick="deleteCategory('${name}')">🗑️</button>
+            <div class="item-actions">
+                <button class="btn-edit-category" title="Edit icon" ${isDefault ? 'disabled' : ''} onclick="openEditCategoryModal('${safeName}')">✏️</button>
+                <button class="btn-delete-category" ${isDefault ? 'disabled title="Cannot delete default category"' : ''} onclick="deleteCategory('${safeName}')">🗑️</button>
+            </div>
         `;
         categoryList.appendChild(item);
     });
 
     renderSubcategoryList();
+}
+
+function openEditCategoryModal(name) {
+    currentEditingCategoryName = name;
+    selectedEditIcon = categories[name]?.icon || '📁';
+    editCategoryNameInput.value = name;
+    editCategoryIconBtn.textContent = selectedEditIcon;
+    editEmojiPickerEl.style.display = 'none';
+    editCategoryModal.classList.add('active');
+}
+
+function closeEditCategoryModal() {
+    editCategoryModal.classList.remove('active');
+    currentEditingCategoryName = null;
+    editEmojiPickerEl.style.display = 'none';
+}
+
+function saveEditCategory() {
+    if (!currentEditingCategoryName || !categories[currentEditingCategoryName]) return;
+    categories[currentEditingCategoryName].icon = selectedEditIcon;
+    saveCategories();
+    populateCategoryDropdowns();
+    renderCategoryList();
+    closeEditCategoryModal();
+    showToast('Category icon updated!', 'success');
 }
 
 function renderSubcategoryList() {
@@ -561,7 +694,7 @@ function renderSubcategoryList() {
 
 async function addNewCategory() {
     const name = newCategoryName.value.trim();
-    const icon = newCategoryIcon.value.trim() || '📁';
+    const icon = selectedNewIcon || '📁';
 
     if (!name) {
         alert('Please enter a category name');
@@ -583,7 +716,11 @@ async function addNewCategory() {
     renderCategoryList();
 
     newCategoryName.value = '';
-    newCategoryIcon.value = '';
+    // Reset picker to default
+    selectedNewIcon = '📁';
+    newCategoryIconBtn.textContent = '📁';
+    newEmojiPickerEl.style.display = 'none';
+    showToast(`Category "${name}" added!`, 'success');
 }
 
 async function deleteCategory(name) {
@@ -1419,11 +1556,11 @@ function updateStats() {
     const today = getLocalDateString(new Date());
     const currentMonth = today.substring(0, 7);
 
-    const todayExpenses = expenses.filter(e => getLocalDateString(new Date(e.date)) === today);
+    const todayExpenses = expenses.filter(e => e.date === today);
     const todaySum = todayExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     todayTotal.textContent = formatCurrency(todaySum);
 
-    const monthExpenses = expenses.filter(e => getLocalDateString(new Date(e.date)).startsWith(currentMonth));
+    const monthExpenses = expenses.filter(e => e.date.startsWith(currentMonth));
     const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     monthTotal.textContent = formatCurrency(monthSum);
 
