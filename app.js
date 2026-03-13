@@ -121,6 +121,7 @@ let categoryChart = null;
 let dailyChart = null;
 let monthlyChart = null;
 
+
 // DOM Elements
 const expenseForm = document.getElementById('expense-form');
 const expenseDate = document.getElementById('expense-date');
@@ -488,6 +489,13 @@ function setupEventListeners() {
         tab.addEventListener('click', () => switchChartTab(tab.dataset.chart));
     });
 
+    // Shared month filter for Group 1
+    document.getElementById('analytics-month-select').addEventListener('change', () => {
+        renderCategoryChart();
+        renderDailyChart();
+        updateAnalyticsInsights();
+    });
+
     // Export and Delete All
     exportCsvBtn.addEventListener('click', exportToCSV);
     deleteAllBtn.addEventListener('click', handleDeleteAll);
@@ -807,7 +815,7 @@ async function saveBudgetSettings() {
     updateStats();
     checkBudgetAlert();
 
-    showToast('Budget settings saved!', 'success');
+    showToast('Income settings saved!', 'success');
 }
 
 // ===== Toast Notification =====
@@ -847,16 +855,16 @@ function checkBudgetAlert() {
     }
 
     const currentMonth = new Date().toISOString().substring(0, 7);
-    const monthExpenses = expenses.filter(e => e.date.startsWith(currentMonth));
+    const monthExpenses = expenses.filter(e => e.date.substring(0, 7) === currentMonth);
     const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     const percentage = (monthSum / settings.monthlyBudget) * 100;
 
-    if (percentage >= 100) {
-        alertMessage.textContent = `⚠️ You've exceeded your monthly budget by ${formatCurrency(monthSum - settings.monthlyBudget)}!`;
+    if (monthSum > settings.monthlyBudget) {
+        alertMessage.textContent = `⚠️ You've exceeded your monthly income by ${formatCurrency(monthSum - settings.monthlyBudget)}!`;
         budgetAlert.classList.remove('warning');
         budgetAlert.classList.add('visible');
     } else if (percentage >= settings.warningThreshold) {
-        alertMessage.textContent = `⚠️ You've used ${percentage.toFixed(0)}% of your monthly budget. ${formatCurrency(settings.monthlyBudget - monthSum)} remaining.`;
+        alertMessage.textContent = `⚠️ You've used ${percentage.toFixed(0)}% of your monthly income. ${formatCurrency(settings.monthlyBudget - monthSum)} remaining.`;
         budgetAlert.classList.add('warning', 'visible');
     } else {
         budgetAlert.classList.remove('visible');
@@ -868,26 +876,65 @@ function switchChartTab(chart) {
     document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`[data-chart="${chart}"]`).classList.add('active');
 
-    document.querySelectorAll('.chart-wrapper').forEach(w => w.classList.add('hidden'));
+    // Only toggle Group 1 chart wrappers (category and daily)
+    const group1Wrappers = ['category-chart-wrapper', 'daily-chart-wrapper'];
+    group1Wrappers.forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+    });
     document.getElementById(`${chart}-chart-wrapper`).classList.remove('hidden');
 
     // Re-render the chart to ensure correct dimensions
     if (chart === 'category') renderCategoryChart();
     if (chart === 'daily') renderDailyChart();
-    if (chart === 'monthly') renderMonthlyChart();
 }
 
 function renderCharts() {
     renderCategoryChart();
     renderDailyChart();
     renderMonthlyChart();
+    updateAnalyticsInsights();
 }
 
 function renderCategoryChart() {
     const ctx = document.getElementById('category-chart').getContext('2d');
+    const monthSelect = document.getElementById('analytics-month-select');
+
+    // Populate month options from available expense data
+    const months = new Set();
+    expenses.forEach(exp => {
+        const m = exp.date.substring(0, 7);
+        if (m) months.add(m);
+    });
+
+    const sortedMonths = [...months].sort().reverse();
+    const currentValue = monthSelect.value;
+
+    monthSelect.innerHTML = '<option value="all">All Time</option>';
+    sortedMonths.forEach(m => {
+        const [year, month] = m.split('-');
+        const label = new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const option = document.createElement('option');
+        option.value = m;
+        option.textContent = label;
+        monthSelect.appendChild(option);
+    });
+
+    // Default to current month on first render, preserve selection otherwise
+    if (currentValue && (currentValue === 'all' || sortedMonths.includes(currentValue))) {
+        monthSelect.value = currentValue;
+    } else if (sortedMonths.length > 0) {
+        monthSelect.value = sortedMonths[0]; // current/latest month
+    }
+
+    // Filter expenses by selected month
+    const selectedMonth = monthSelect.value;
+    let filtered = expenses;
+    if (selectedMonth !== 'all') {
+        filtered = expenses.filter(e => e.date.substring(0, 7) === selectedMonth);
+    }
 
     const categoryTotals = {};
-    expenses.forEach(exp => {
+    filtered.forEach(exp => {
         categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + parseFloat(exp.amount);
     });
 
@@ -911,10 +958,14 @@ function renderCategoryChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            cutout: '55%',
+            layout: {
+                padding: { top: 10, bottom: 10 }
+            },
             plugins: {
                 legend: {
-                    position: 'right',
-                    labels: { color: '#94a3b8', font: { size: 12 }, padding: 15 }
+                    position: 'bottom',
+                    labels: { color: '#94a3b8', font: { size: 12 }, padding: 12, boxWidth: 14 }
                 },
                 tooltip: {
                     callbacks: {
@@ -933,16 +984,32 @@ function renderCategoryChart() {
 
 function renderDailyChart() {
     const ctx = document.getElementById('daily-chart').getContext('2d');
+    const selectedMonth = document.getElementById('analytics-month-select').value;
 
     const days = [];
-    const today = new Date();
-    // Normalize to local midnight to avoid timezone shifts during iteration
-    today.setHours(0, 0, 0, 0);
 
-    for (let i = 13; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        days.push(getLocalDateString(d));
+    if (selectedMonth !== 'all') {
+        // Show all days in the selected month
+        const [y, m] = selectedMonth.split('-').map(Number);
+        const daysInMonth = new Date(y, m, 0).getDate();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = getLocalDateString(today);
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${selectedMonth}-${String(d).padStart(2, '0')}`;
+            if (dateStr > todayStr) break; // Don't show future dates
+            days.push(dateStr);
+        }
+    } else {
+        // Default: last 14 days
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        for (let i = 13; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            days.push(getLocalDateString(d));
+        }
     }
 
     // Initialize data array with 0s
@@ -950,7 +1017,7 @@ function renderDailyChart() {
 
     // Sum expenses by matching date string directly
     expenses.forEach(exp => {
-        const idx = days.indexOf(exp.date);
+        const idx = days.indexOf(exp.date.substring(0, 10));
         if (idx !== -1) {
             data[idx] += parseFloat(exp.amount) || 0;
         }
@@ -1063,6 +1130,134 @@ function renderMonthlyChart() {
             }
         }
     });
+}
+
+
+
+
+function updateAnalyticsInsights() {
+    const today = getLocalDateString(new Date());
+    const currentMonth = today.substring(0, 7);
+    const todayDate = new Date();
+
+    // Selected month for Group 1 (drains)
+    const selectedMonth = document.getElementById('analytics-month-select').value;
+
+    // Drains use selected month, comparison always uses current month
+    let drainsExpenses;
+    if (selectedMonth !== 'all') {
+        drainsExpenses = expenses.filter(e => e.date.substring(0, 7) === selectedMonth);
+    } else {
+        drainsExpenses = expenses;
+    }
+
+    // Current month expenses for vs Last Month comparison
+    const monthExpenses = expenses.filter(e => e.date.substring(0, 7) === currentMonth);
+    const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+
+    // --- Month vs Last Month ---
+    const lastMonthDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+    const lastMonth = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
+    const lastMonthExpenses = expenses.filter(e => e.date.substring(0, 7) === lastMonth);
+
+    const comparisonList = document.getElementById('comparison-list');
+
+    // Build category totals for both months
+    const thisMonthCats = {};
+    const lastMonthCats = {};
+
+    monthExpenses.forEach(e => {
+        thisMonthCats[e.category] = (thisMonthCats[e.category] || 0) + parseFloat(e.amount);
+    });
+    lastMonthExpenses.forEach(e => {
+        lastMonthCats[e.category] = (lastMonthCats[e.category] || 0) + parseFloat(e.amount);
+    });
+
+    const allCats = new Set([...Object.keys(thisMonthCats), ...Object.keys(lastMonthCats)]);
+
+    if (allCats.size === 0) {
+        comparisonList.innerHTML = '<div class="comparison-empty">No data to compare yet</div>';
+    } else {
+        // Sort by this month's total descending
+        const sorted = [...allCats].sort((a, b) => (thisMonthCats[b] || 0) - (thisMonthCats[a] || 0));
+        comparisonList.innerHTML = '';
+
+        sorted.forEach(cat => {
+            const thisVal = thisMonthCats[cat] || 0;
+            const lastVal = lastMonthCats[cat] || 0;
+            const catData = categories[cat] || { icon: '📋' };
+
+            let changeHtml = '';
+            if (lastVal === 0 && thisVal > 0) {
+                changeHtml = '<span class="comparison-change up">🆕 New</span>';
+            } else if (lastVal > 0 && thisVal === 0) {
+                changeHtml = '<span class="comparison-change down">↓ 100%</span>';
+            } else if (lastVal > 0) {
+                const pctChange = ((thisVal - lastVal) / lastVal) * 100;
+                if (Math.abs(pctChange) < 1) {
+                    changeHtml = '<span class="comparison-change same">— same</span>';
+                } else if (pctChange > 0) {
+                    changeHtml = `<span class="comparison-change up">↑ ${Math.round(pctChange)}%</span>`;
+                } else {
+                    changeHtml = `<span class="comparison-change down">↓ ${Math.round(Math.abs(pctChange))}%</span>`;
+                }
+            }
+
+            const item = document.createElement('div');
+            item.className = 'comparison-item';
+            item.innerHTML = `
+                <span class="comparison-cat">
+                    <span class="comparison-cat-icon">${catData.icon}</span>
+                    ${cat}
+                </span>
+                <div class="comparison-amounts">
+                    <span class="comparison-value">${formatCurrency(thisVal)}</span>
+                    ${changeHtml}
+                </div>
+            `;
+            comparisonList.appendChild(item);
+        });
+    }
+
+    // --- Top Money Drains ---
+    const drainsList = document.getElementById('drains-list');
+
+    if (drainsExpenses.length === 0) {
+        drainsList.innerHTML = '<div class="drains-empty">No expenses for this period</div>';
+    } else {
+        // Group by subcategory
+        const subTotals = {};
+        drainsExpenses.forEach(e => {
+            const key = `${e.category} › ${e.subcategory}`;
+            if (!subTotals[key]) {
+                subTotals[key] = { total: 0, count: 0, category: e.category };
+            }
+            subTotals[key].total += parseFloat(e.amount);
+            subTotals[key].count++;
+        });
+
+        const sorted = Object.entries(subTotals)
+            .sort((a, b) => b[1].total - a[1].total)
+            .slice(0, 3);
+
+        drainsList.innerHTML = '';
+        const medals = ['🥇', '🥈', '🥉'];
+
+        sorted.forEach(([name, data], i) => {
+            const catData = categories[data.category] || { icon: '📋' };
+            const item = document.createElement('div');
+            item.className = 'drain-item';
+            item.innerHTML = `
+                <span class="drain-rank">${medals[i]}</span>
+                <div class="drain-info">
+                    <span class="drain-name">${catData.icon} ${name.split(' › ')[1]}</span>
+                    <span class="drain-meta">${data.count} transaction${data.count > 1 ? 's' : ''} · ${name.split(' › ')[0]}</span>
+                </div>
+                <span class="drain-amount">${formatCurrency(data.total)}</span>
+            `;
+            drainsList.appendChild(item);
+        });
+    }
 }
 
 function generateColors(count) {
@@ -1556,11 +1751,11 @@ function updateStats() {
     const today = getLocalDateString(new Date());
     const currentMonth = today.substring(0, 7);
 
-    const todayExpenses = expenses.filter(e => e.date === today);
+    const todayExpenses = expenses.filter(e => e.date.substring(0, 10) === today);
     const todaySum = todayExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     todayTotal.textContent = formatCurrency(todaySum);
 
-    const monthExpenses = expenses.filter(e => e.date.startsWith(currentMonth));
+    const monthExpenses = expenses.filter(e => e.date.substring(0, 7) === currentMonth);
     const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     monthTotal.textContent = formatCurrency(monthSum);
 
