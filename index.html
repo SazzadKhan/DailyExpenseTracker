@@ -88,7 +88,7 @@
                 <section class="input-section">
                     <h2 class="section-title">
                         <span class="title-icon">➕</span>
-                        Add New Expense
+                        Add New Transaction
                     </h2>
                     <form id="expense-form" class="expense-form">
                         <div class="form-row">
@@ -121,9 +121,9 @@
                                     maxlength="200">
                             </div>
                             <div class="form-group form-group-button">
-                                <button type="submit" class="btn-add">
+                                <button type="submit" class="btn-add" id="btn-add-transaction">
                                     <span class="btn-icon">+</span>
-                                    Add Expense
+                                    Add Transaction
                                 </button>
                             </div>
                         </div>
@@ -338,7 +338,7 @@
                 <button class="modal-close" id="settings-close">&times;</button>
             </div>
             <div class="settings-tabs">
-                <button class="settings-tab active" data-tab="budget">💰 Income</button>
+                <button class="settings-tab active" data-tab="budget">🔔 Alerts</button>
                 <button class="settings-tab" data-tab="categories">📁 Categories</button>
                 <button class="settings-tab" data-tab="data">💾 Data</button>
             </div>
@@ -374,15 +374,11 @@
                 </div>
             </div>
 
-            <!-- Budget Tab -->
+            <!-- Alerts Tab (formerly Budget/Income) -->
             <div class="settings-content" id="budget-tab">
-                <h4>Monthly Income Settings</h4>
+                <h4>Income percentage Alerts</h4>
                 <div class="budget-settings">
-                    <div class="form-group">
-                        <label for="monthly-budget">Monthly Income</label>
-                        <input type="number" id="monthly-budget" step="0.01" min="0"
-                            placeholder="Enter income amount...">
-                    </div>
+                    <input type="hidden" id="monthly-budget" value="0">
                     <div class="form-group">
                         <label for="warning-threshold">Warning Threshold (%)</label>
                         <input type="number" id="warning-threshold" min="50" max="100" value="80" placeholder="80">

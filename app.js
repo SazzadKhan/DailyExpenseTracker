@@ -11,6 +11,7 @@ const isCloudEnabled = GOOGLE_SCRIPT_URL !== 'YOUR_GOOGLE_SCRIPT_URL_HERE' && GO
 
 // Default categories and subcategories
 const defaultCategories = {
+    'Income': { icon: '💰', subcategories: ['Salary', 'Freelance', 'Gift', 'Investment', 'Other'] },
     'Food & Dining': { icon: '🍔', subcategories: ['Groceries', 'Restaurants', 'Coffee & Snacks', 'Fast Food', 'Delivery', 'Other'] },
     'Transportation': { icon: '🚗', subcategories: ['Fuel/Gas', 'Public Transit', 'Uber/Lyft', 'Parking', 'Car Maintenance', 'Other'] },
     'Shopping': { icon: '🛍️', subcategories: ['Clothes', 'Electronics', 'Home & Garden', 'Gifts', 'Online Shopping', 'Other'] },
@@ -104,6 +105,12 @@ const currencies = {
 // Initialize data from localStorage (fallback)
 let expenses = JSON.parse(localStorage.getItem('expenses')) || [];
 let categories = JSON.parse(localStorage.getItem('categories')) || JSON.parse(JSON.stringify(defaultCategories));
+
+// Ensure Income category always exists (backfill for older saves that may not have it)
+if (!categories['Income']) {
+    categories['Income'] = JSON.parse(JSON.stringify(defaultCategories['Income']));
+    localStorage.setItem('categories', JSON.stringify(categories));
+}
 let settings = JSON.parse(localStorage.getItem('settings')) || {
     currency: 'USD',
     monthlyBudget: 0,
@@ -271,6 +278,11 @@ async function syncFromCloud() {
         const categoriesData = await fetchFromCloud('getCategories');
         if (categoriesData && categoriesData.categories && Object.keys(categoriesData.categories).length > 0) {
             categories = categoriesData.categories;
+            // Backfill Income if the cloud data is missing it, then push back so cloud stays in sync
+            if (!categories['Income']) {
+                categories['Income'] = JSON.parse(JSON.stringify(defaultCategories['Income']));
+                postToCloud('saveCategories', { categories });
+            }
             localStorage.setItem('categories', JSON.stringify(categories));
         } else {
             // Cloud is empty - push current categories to cloud
@@ -603,20 +615,62 @@ function formatCurrency(amount) {
 }
 
 // ===== Category Management =====
+// Income category keys — any category name that represents income
+const INCOME_CATEGORY_KEYS = ['Income'];
+
+function isIncomeCategory(name) {
+    return INCOME_CATEGORY_KEYS.includes(name);
+}
+
 function populateCategoryDropdowns() {
     const dropdowns = [expenseCategory, editCategory, filterCategory, subcategoryCategory];
 
     dropdowns.forEach((dropdown, index) => {
-        dropdown.innerHTML = index === 2
+        const isFilter = index === 2;
+        dropdown.innerHTML = isFilter
             ? '<option value="">All Categories</option>'
             : '<option value="">Select Category</option>';
 
-        Object.entries(categories).forEach(([name, data]) => {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = `${data.icon} ${name}`;
-            dropdown.appendChild(option);
-        });
+        // Split into Income and Expense groups
+        const incomeEntries = Object.entries(categories).filter(([name]) => isIncomeCategory(name));
+        const expenseEntries = Object.entries(categories).filter(([name]) => !isIncomeCategory(name));
+
+        // For the add/edit form dropdowns, use optgroups with separators
+        if (!isFilter) {
+            // ── Income ── group
+            if (incomeEntries.length > 0) {
+                const incomeGroup = document.createElement('optgroup');
+                incomeGroup.label = '── Income ──';
+                incomeEntries.forEach(([name, data]) => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = `${data.icon} ${name}`;
+                    incomeGroup.appendChild(opt);
+                });
+                dropdown.appendChild(incomeGroup);
+            }
+
+            // ── Expenses ── group
+            if (expenseEntries.length > 0) {
+                const expenseGroup = document.createElement('optgroup');
+                expenseGroup.label = '── Expenses ──';
+                expenseEntries.forEach(([name, data]) => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = `${data.icon} ${name}`;
+                    expenseGroup.appendChild(opt);
+                });
+                dropdown.appendChild(expenseGroup);
+            }
+        } else {
+            // For filter dropdown, flat list is fine
+            Object.entries(categories).forEach(([name, data]) => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = `${data.icon} ${name}`;
+                dropdown.appendChild(option);
+            });
+        }
     });
 }
 
@@ -855,16 +909,21 @@ function checkBudgetAlert() {
     }
 
     const currentMonth = new Date().toISOString().substring(0, 7);
-    const monthExpenses = expenses.filter(e => e.date.substring(0, 7) === currentMonth);
+    const monthExpenses = expenses.filter(e => e.date.substring(0, 7) === currentMonth && (e.type === 'expense' || (e.type !== 'income' && e.category !== 'Income')));
     const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
-    const percentage = (monthSum / settings.monthlyBudget) * 100;
+    
+    // Calculate Monthly Income dynamically
+    const monthIncomeRecords = expenses.filter(e => e.date.substring(0, 7) === currentMonth && (e.type === 'income' || e.category === 'Income'));
+    const monthIncome = monthIncomeRecords.reduce((sum, e) => sum + parseFloat(e.amount), 0);
 
-    if (monthSum > settings.monthlyBudget) {
-        alertMessage.textContent = `⚠️ You've exceeded your monthly income by ${formatCurrency(monthSum - settings.monthlyBudget)}!`;
+    const percentage = monthIncome > 0 ? (monthSum / monthIncome) * 100 : (monthSum > 0 ? 100 : 0);
+
+    if (monthIncome > 0 && monthSum > monthIncome) {
+        alertMessage.textContent = `⚠️ You've exceeded your monthly income by ${formatCurrency(monthSum - monthIncome)}!`;
         budgetAlert.classList.remove('warning');
         budgetAlert.classList.add('visible');
-    } else if (percentage >= settings.warningThreshold) {
-        alertMessage.textContent = `⚠️ You've used ${percentage.toFixed(0)}% of your monthly income. ${formatCurrency(settings.monthlyBudget - monthSum)} remaining.`;
+    } else if (monthIncome > 0 && percentage >= settings.warningThreshold) {
+        alertMessage.textContent = `⚠️ You've spent ${percentage.toFixed(0)}% of your monthly income. ${formatCurrency(monthIncome - monthSum)} remaining.`;
         budgetAlert.classList.add('warning', 'visible');
     } else {
         budgetAlert.classList.remove('visible');
@@ -1222,12 +1281,14 @@ function updateAnalyticsInsights() {
     // --- Top Money Drains ---
     const drainsList = document.getElementById('drains-list');
 
-    if (drainsExpenses.length === 0) {
+    const drainsExpensesFiltered = drainsExpenses.filter(e => e.type !== 'income' && e.category !== 'Income');
+
+    if (drainsExpensesFiltered.length === 0) {
         drainsList.innerHTML = '<div class="drains-empty">No expenses for this period</div>';
     } else {
         // Group by subcategory
         const subTotals = {};
-        drainsExpenses.forEach(e => {
+        drainsExpensesFiltered.forEach(e => {
             const key = `${e.category} › ${e.subcategory}`;
             if (!subTotals[key]) {
                 subTotals[key] = { total: 0, count: 0, category: e.category };
@@ -1272,14 +1333,19 @@ function generateColors(count) {
     return colors;
 }
 
-// ===== Add Expense =====
+// ===== Add Transaction =====
 async function handleAddExpense(e) {
     e.preventDefault();
 
+    // Derive transaction type from the selected category
+    const selectedCategory = expenseCategory.value;
+    const transactionType = isIncomeCategory(selectedCategory) ? 'income' : 'expense';
+
     const expense = {
         id: Date.now().toString(),
+        type: transactionType,
         date: expenseDate.value,
-        category: expenseCategory.value,
+        category: selectedCategory,
         subcategory: expenseSubcategory.value,
         amount: parseFloat(expenseAmount.value),
         description: expenseDescription.value.trim(),
@@ -1341,18 +1407,26 @@ function renderExpenses() {
         });
     }
 
-    const total = filtered.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    const total = filtered.reduce((sum, exp) => {
+        const isIncome = exp.type === 'income' || exp.category === 'Income';
+        return isIncome ? sum + parseFloat(exp.amount) : sum - parseFloat(exp.amount);
+    }, 0);
     filteredTotal.textContent = formatCurrency(total);
 }
 
 function createExpenseRow(expense) {
     const tr = document.createElement('tr');
     const categoryData = categories[expense.category] || { icon: '📋' };
+    const isIncome = expense.type === 'income' || expense.category === 'Income';
+    const amountVal = parseFloat(expense.amount);
+    const amountDisplay = isIncome ? `+ ${formatCurrency(amountVal)}` : `- ${formatCurrency(amountVal)}`;
+    const amountClass = isIncome ? 'income-amount' : 'expense-amount';
+
     tr.innerHTML = `
         <td>${formatDate(expense.date)}</td>
         <td><span class="category-badge" data-category="${expense.category}">${categoryData.icon} ${expense.category}</span></td>
         <td class="subcategory-text">${expense.subcategory}</td>
-        <td>${formatCurrency(parseFloat(expense.amount))}</td>
+        <td class="${amountClass}">${amountDisplay}</td>
         <td class="description-text" title="${expense.description || '-'}">${expense.description || '-'}</td>
         <td class="action-buttons">
             <button class="btn-edit" onclick="openEditModal('${expense.id}')">✏️ Edit</button>
@@ -1368,6 +1442,11 @@ function createExpenseCard(expense) {
     card.dataset.id = expense.id;
     const categoryData = categories[expense.category] || { icon: '📋' };
 
+    const isIncome = expense.type === 'income' || expense.category === 'Income';
+    const amountVal = parseFloat(expense.amount);
+    const amountDisplay = isIncome ? `+ ${formatCurrency(amountVal)}` : `- ${formatCurrency(amountVal)}`;
+    const amountClass = isIncome ? 'income-amount' : 'expense-amount';
+
     card.innerHTML = `
         <div class="expense-card-main" data-category="${expense.category}">
             <div class="expense-card-left">
@@ -1377,7 +1456,7 @@ function createExpenseCard(expense) {
                 <span class="expense-card-title">${expense.subcategory}</span>
                 <span class="expense-card-meta">${formatDate(expense.date)}${expense.description ? ' · ' + expense.description : ''}</span>
             </div>
-            <span class="expense-card-amount">${formatCurrency(parseFloat(expense.amount))}</span>
+            <span class="expense-card-amount ${amountClass}">${amountDisplay}</span>
         </div>
         <div class="expense-card-actions">
             <button class="btn-card-edit" onclick="event.stopPropagation(); openEditModal('${expense.id}')">✏️ Edit</button>
@@ -1751,24 +1830,38 @@ function updateStats() {
     const today = getLocalDateString(new Date());
     const currentMonth = today.substring(0, 7);
 
-    const todayExpenses = expenses.filter(e => e.date.substring(0, 10) === today);
+    // Calculate Today's Spending (only expenses)
+    const todayExpenses = expenses.filter(e => e.date.substring(0, 10) === today && (e.type === 'expense' || (e.type !== 'income' && e.category !== 'Income')));
     const todaySum = todayExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     todayTotal.textContent = formatCurrency(todaySum);
 
-    const monthExpenses = expenses.filter(e => e.date.substring(0, 7) === currentMonth);
-    const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
-    monthTotal.textContent = formatCurrency(monthSum);
+    // Calculate This Month's Income & Expense
+    const monthTransactions = expenses.filter(e => e.date.substring(0, 7) === currentMonth);
+    
+    let monthIncome = 0;
+    let monthExpense = 0;
+    
+    monthTransactions.forEach(e => {
+        const isIncome = e.type === 'income' || e.category === 'Income';
+        if (isIncome) {
+            monthIncome += parseFloat(e.amount);
+        } else {
+            monthExpense += parseFloat(e.amount);
+        }
+    });
+
+    monthTotal.textContent = formatCurrency(monthExpense);
 
     totalEntries.textContent = expenses.length;
 
-    if (settings.monthlyBudget > 0) {
-        const percentage = (monthSum / settings.monthlyBudget) * 100;
-        const remaining = settings.monthlyBudget - monthSum;
-
-        budgetStatus.textContent = remaining >= 0
-            ? formatCurrency(remaining) + ' left'
-            : formatCurrency(Math.abs(remaining)) + ' over';
-
+    // Budget -> Income Tracker Refactor
+    const remaining = monthIncome - monthExpense;
+    
+    budgetStatus.textContent = formatCurrency(remaining);
+    
+    // Only show warning based on Income percentage if monthIncome > 0
+    if (monthIncome > 0) {
+        const percentage = (monthExpense / monthIncome) * 100;
         budgetBar.style.width = Math.min(percentage, 100) + '%';
         budgetBar.classList.remove('warning', 'danger');
 
@@ -1778,8 +1871,9 @@ function updateStats() {
             budgetBar.classList.add('warning');
         }
     } else {
-        budgetStatus.textContent = 'Not Set';
         budgetBar.style.width = '0%';
+        budgetBar.classList.remove('warning', 'danger');
+        if (monthExpense > 0) budgetBar.classList.add('danger');
     }
 }
 

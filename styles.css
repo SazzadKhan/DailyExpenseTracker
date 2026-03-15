@@ -510,6 +510,45 @@ body {
     border: 1px solid var(--border);
 }
 
+/* ===== Transaction Type Toggle ===== */
+.transaction-type-toggle {
+    display: flex;
+    background: var(--bg-input);
+    padding: 4px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+}
+
+.type-radio {
+    flex: 1;
+    cursor: pointer;
+}
+
+.type-radio input[type="radio"] {
+    display: none;
+}
+
+.type-btn {
+    display: block;
+    text-align: center;
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+
+.type-radio input[type="radio"]:checked + .type-btn {
+    background: var(--bg-card);
+    color: var(--danger-dark);
+    box-shadow: var(--shadow-sm);
+}
+
+.type-radio input[type="radio"]:checked + .income-btn {
+    color: var(--secondary);
+}
+
 .expense-form {
     display: flex;
     flex-direction: column;
