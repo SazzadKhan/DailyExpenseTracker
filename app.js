@@ -1436,10 +1436,15 @@ function createExpenseRow(expense) {
         <td class="${amountClass}">${amountDisplay}</td>
         <td class="description-text" title="${expense.description || '-'}">${expense.description || '-'}</td>
         <td class="action-buttons">
-            <button class="btn-edit" onclick="openEditModal('${expense.id}')">✏️ Edit</button>
-            <button class="btn-delete" onclick="deleteExpense('${expense.id}')">🗑️ Delete</button>
+            <button class="btn-edit">✏️ Edit</button>
+            <button class="btn-delete">🗑️ Delete</button>
         </td>
     `;
+
+    // Use addEventListener to avoid broken onclick when IDs contain special characters
+    tr.querySelector('.btn-edit').addEventListener('click', () => openEditModal(expense.id));
+    tr.querySelector('.btn-delete').addEventListener('click', () => deleteExpense(expense.id));
+
     return tr;
 }
 
@@ -1466,10 +1471,20 @@ function createExpenseCard(expense) {
             <span class="expense-card-amount ${amountClass}">${amountDisplay}</span>
         </div>
         <div class="expense-card-actions">
-            <button class="btn-card-edit" onclick="event.stopPropagation(); openEditModal('${expense.id}')">✏️ Edit</button>
-            <button class="btn-card-delete" onclick="event.stopPropagation(); deleteExpense('${expense.id}')">🗑️ Delete</button>
+            <button class="btn-card-edit">✏️ Edit</button>
+            <button class="btn-card-delete">🗑️ Delete</button>
         </div>
     `;
+
+    // Use addEventListener to avoid broken onclick when IDs contain special characters
+    card.querySelector('.btn-card-edit').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openEditModal(expense.id);
+    });
+    card.querySelector('.btn-card-delete').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteExpense(expense.id);
+    });
 
     // Tap to select/deselect card
     card.addEventListener('click', () => {
