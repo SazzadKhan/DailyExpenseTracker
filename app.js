@@ -260,7 +260,14 @@ async function syncFromCloud() {
         // Fetch expenses
         const expensesData = await fetchFromCloud('getExpenses');
         if (expensesData && expensesData.expenses && expensesData.expenses.length > 0) {
-            expenses = expensesData.expenses;
+            // Normalize dates to YYYY-MM-DD using local timezone
+            // Google Sheets may return dates in different formats (ISO datetime, locale strings, etc.)
+            expenses = expensesData.expenses.map(exp => {
+                if (exp.date) {
+                    exp.date = normalizeDateString(exp.date);
+                }
+                return exp;
+            });
             localStorage.setItem('expenses', JSON.stringify(expenses));
         }
 
@@ -1533,8 +1540,9 @@ function sortExpenses(expensesToSort) {
             valueA = parseFloat(valueA);
             valueB = parseFloat(valueB);
         } else if (currentSort.column === 'date') {
-            valueA = new Date(valueA);
-            valueB = new Date(valueB);
+            // Compare date strings directly (YYYY-MM-DD sorts lexicographically)
+            valueA = (valueA || '').substring(0, 10);
+            valueB = (valueB || '').substring(0, 10);
         } else {
             valueA = valueA?.toLowerCase() || '';
             valueB = valueB?.toLowerCase() || '';
@@ -1729,14 +1737,22 @@ function importFromCSV(file) {
                     continue;
                 }
 
-                // Validate date format (try to parse it)
-                const parsedDate = new Date(date);
-                if (isNaN(parsedDate.getTime())) {
-                    errors.push(`Row ${i + 1}: Invalid date format`);
-                    continue;
+                // Validate and normalize date format
+                // Try to extract a YYYY-MM-DD string without going through UTC
+                let formattedDate;
+                const isoMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (isoMatch) {
+                    // Already YYYY-MM-DD
+                    formattedDate = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+                } else {
+                    // Try parsing other formats, but use local date parts to avoid timezone shift
+                    const parsedDate = new Date(date);
+                    if (isNaN(parsedDate.getTime())) {
+                        errors.push(`Row ${i + 1}: Invalid date format`);
+                        continue;
+                    }
+                    formattedDate = getLocalDateString(parsedDate);
                 }
-
-                const formattedDate = parsedDate.toISOString().split('T')[0];
 
                 newExpenses.push({
                     id: Date.now().toString() + '_' + i,
@@ -1879,6 +1895,17 @@ function updateStats() {
 
 // ===== Utility Functions =====
 function formatDate(dateString) {
+    // Manually parse YYYY-MM-DD to avoid UTC interpretation that shifts dates
+    const parts = dateString.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (parts) {
+        const date = new Date(parseInt(parts[1]), parseInt(parts[2]) - 1, parseInt(parts[3]));
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    }
+    // Fallback for non-standard formats
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
         year: 'numeric',
@@ -1905,6 +1932,32 @@ function getLocalDateString(date) {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+// Normalize a date string to YYYY-MM-DD format using local timezone
+// Handles various formats: YYYY-MM-DD, ISO datetime, locale strings, etc.
+function normalizeDateString(dateStr) {
+    if (!dateStr) return dateStr;
+
+    // Already in YYYY-MM-DD format — return as-is
+    const isoMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) return dateStr;
+
+    // Has YYYY-MM-DD at the start (e.g. "2026-05-07T18:00:00.000Z")
+    // Manually extract the date portion to avoid UTC shift
+    const isoDateTimeMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})T/);
+    if (isoDateTimeMatch) {
+        return `${isoDateTimeMatch[1]}-${isoDateTimeMatch[2]}-${isoDateTimeMatch[3]}`;
+    }
+
+    // Fallback: parse and convert using local timezone
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) {
+        return getLocalDateString(parsed);
+    }
+
+    // Can't parse — return original
+    return dateStr;
 }
 
 function saveExpenses() {
