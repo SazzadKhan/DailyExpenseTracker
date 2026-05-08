@@ -846,6 +846,8 @@ async function deleteSubcategory(category, subcategory) {
 function openSettingsModal() {
     loadSettingsForm();
     renderCategoryList();
+    // Default to General tab
+    switchSettingsTab('general');
     settingsModal.classList.add('active');
 }
 

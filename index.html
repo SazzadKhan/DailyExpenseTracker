@@ -26,28 +26,6 @@
                         <span class="sync-status" id="sync-status">📴 Offline mode</span>
                         <button class="btn-sync" id="sync-btn" title="Sync with cloud">🔄</button>
                     </div>
-                    <div class="currency-selector">
-                        <label for="currency-select">Currency:</label>
-                        <select id="currency-select">
-                            <option value="USD" data-symbol="$">🇺🇸 USD ($)</option>
-                            <option value="EUR" data-symbol="€">🇪🇺 EUR (€)</option>
-                            <option value="GBP" data-symbol="£">🇬🇧 GBP (£)</option>
-                            <option value="BDT" data-symbol="৳">🇧🇩 BDT (৳)</option>
-                            <option value="INR" data-symbol="₹">🇮🇳 INR (₹)</option>
-                            <option value="JPY" data-symbol="¥">🇯🇵 JPY (¥)</option>
-                            <option value="CAD" data-symbol="C$">🇨🇦 CAD (C$)</option>
-                            <option value="AUD" data-symbol="A$">🇦🇺 AUD (A$)</option>
-                        </select>
-                    </div>
-                    <div class="theme-selector">
-                        <label for="theme-select">Theme:</label>
-                        <select id="theme-select">
-                            <option value="dark">🌙 Dark</option>
-                            <option value="panda">🐼 Panda</option>
-                            <option value="peaceful">🌿 Peaceful</option>
-                            <option value="edgy">🔥 Edgy</option>
-                        </select>
-                    </div>
                     <button class="btn-settings" id="settings-btn">⚙️ Settings</button>
                 </div>
             </div>
@@ -338,9 +316,39 @@
                 <button class="modal-close" id="settings-close">&times;</button>
             </div>
             <div class="settings-tabs">
-                <button class="settings-tab active" data-tab="budget">🔔 Alerts</button>
+                <button class="settings-tab active" data-tab="general">🎨 General</button>
+                <button class="settings-tab" data-tab="budget">🔔 Alerts</button>
                 <button class="settings-tab" data-tab="categories">📁 Categories</button>
                 <button class="settings-tab" data-tab="data">💾 Data</button>
+            </div>
+
+            <!-- General Tab (Currency & Theme) -->
+            <div class="settings-content" id="general-tab">
+                <h4>Appearance & Currency</h4>
+                <div class="settings-group">
+                    <div class="form-group">
+                        <label for="currency-select">Currency</label>
+                        <select id="currency-select">
+                            <option value="USD" data-symbol="$">🇺🇸 USD ($)</option>
+                            <option value="EUR" data-symbol="€">🇪🇺 EUR (€)</option>
+                            <option value="GBP" data-symbol="£">🇬🇧 GBP (£)</option>
+                            <option value="BDT" data-symbol="৳">🇧🇩 BDT (৳)</option>
+                            <option value="INR" data-symbol="₹">🇮🇳 INR (₹)</option>
+                            <option value="JPY" data-symbol="¥">🇯🇵 JPY (¥)</option>
+                            <option value="CAD" data-symbol="C$">🇨🇦 CAD (C$)</option>
+                            <option value="AUD" data-symbol="A$">🇦🇺 AUD (A$)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="theme-select">Theme</label>
+                        <select id="theme-select">
+                            <option value="dark">🌙 Dark</option>
+                            <option value="panda">🐼 Panda</option>
+                            <option value="peaceful">🌿 Peaceful</option>
+                            <option value="edgy">🔥 Edgy</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             <!-- Data Tab -->
@@ -375,7 +383,7 @@
             </div>
 
             <!-- Alerts Tab (formerly Budget/Income) -->
-            <div class="settings-content" id="budget-tab">
+            <div class="settings-content hidden" id="budget-tab">
                 <h4>Income percentage Alerts</h4>
                 <div class="budget-settings">
                     <input type="hidden" id="monthly-budget" value="0">
