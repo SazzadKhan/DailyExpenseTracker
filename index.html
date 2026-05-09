@@ -57,63 +57,18 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Add Page (Input Form) -->
-            <div class="nav-page" data-page="add">
-                <section class="input-section">
-                    <h2 class="section-title">
-                        <span class="title-icon">➕</span>
-                        Add New Transaction
-                    </h2>
-                    <form id="expense-form" class="expense-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="expense-date">Date</label>
-                                <input type="date" id="expense-date" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="expense-category">Category</label>
-                                <select id="expense-category" required>
-                                    <!-- Categories populated by JS -->
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="expense-subcategory">Subcategory</label>
-                                <select id="expense-subcategory" required>
-                                    <option value="">Select Subcategory</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="expense-amount">Amount <span id="amount-currency">($)</span></label>
-                                <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00"
-                                    required>
-                            </div>
-                            <div class="form-group form-group-wide">
-                                <label for="expense-description">Description / Note</label>
-                                <input type="text" id="expense-description" placeholder="Enter description or note..."
-                                    maxlength="200">
-                            </div>
-                            <div class="form-group form-group-button">
-                                <button type="submit" class="btn-add" id="btn-add-transaction">
-                                    <span class="btn-icon">+</span>
-                                    Add Transaction
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </section>
-            </div>
-
             <!-- Dashboard Page (Home) - Active by default -->
             <div class="nav-page active" data-page="dashboard">
                 <div class="dashboard-grid">
                     <section class="analytics-group">
-                        <div class="analytics-group-header">
-                            <h2 class="section-title">
-                                <span class="title-icon">📈</span>
-                                Daily Trend
-                            </h2>
+                        <div class="analytics-group-header" style="justify-content: space-between; align-items: center; width: 100%;">
+                            <div style="display: flex; gap: 15px; align-items: center;">
+                                <h2 class="section-title" style="margin: 0;">
+                                    <span class="title-icon">📈</span>
+                                    Daily Trend
+                                </h2>
+                                <button id="dashboard-add-btn" class="btn-add" style="padding: 6px 12px; font-size: 0.9rem; margin: 0;">➕ Log Entry</button>
+                            </div>
                             <select id="dashboard-month-select" class="chart-month-select">
                                 <option value="all">All Time</option>
                             </select>
@@ -281,6 +236,55 @@
         </footer>
     </div>
 
+    <!-- Add Page (Input Form) -->
+            <div class="modal" id="add-modal">
+                <div class="modal-content modal-large">
+                    <div class="modal-header">
+                <h3>➕ Add New Transaction</h3>
+                <button class="modal-close" id="add-close">&times;</button>
+            </div>
+                    <form id="expense-form" class="expense-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="expense-date">Date</label>
+                                <input type="date" id="expense-date" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="expense-category">Category</label>
+                                <select id="expense-category" required>
+                                    <!-- Categories populated by JS -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="expense-subcategory">Subcategory</label>
+                                <select id="expense-subcategory" required>
+                                    <option value="">Select Subcategory</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="expense-amount">Amount <span id="amount-currency">($)</span></label>
+                                <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00"
+                                    required>
+                            </div>
+                            <div class="form-group form-group-wide">
+                                <label for="expense-description">Description / Note</label>
+                                <input type="text" id="expense-description" placeholder="Enter description or note..."
+                                    maxlength="200">
+                            </div>
+                            <div class="form-group form-group-button">
+                                <button type="submit" class="btn-add" id="btn-add-transaction">
+                                    <span class="btn-icon">+</span>
+                                    Add Transaction
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            
     <!-- Edit Modal -->
     <div class="modal" id="edit-modal">
         <div class="modal-content">
@@ -323,11 +327,13 @@
     </div>
 
     <!-- Settings Modal -->
-    <div class="modal" id="settings-modal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h3>⚙️ Settings</h3>
-                <button class="modal-close" id="settings-close">&times;</button>
+    <div class="nav-page" data-page="settings">
+        <section class="analytics-group">
+            <div class="analytics-group-header">
+                <h2 class="section-title">
+                    <span class="title-icon">⚙️</span>
+                    Settings
+                </h2>
             </div>
             <div class="settings-tabs">
                 <button class="settings-tab active" data-tab="general">🎨 General</button>
@@ -458,7 +464,7 @@
                     <div class="subcategory-list" id="subcategory-list">
                         <!-- Subcategories will be populated here -->
                     </div>
-                </div>
+                </section>
             </div>
 
             <!-- Profile Page (Dummy for now) -->

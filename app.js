@@ -447,11 +447,7 @@ function setupEventListeners() {
     });
 
     // Settings Modal
-    settingsBtn.addEventListener('click', openSettingsModal);
-    settingsClose.addEventListener('click', closeSettingsModal);
-    settingsModal.addEventListener('click', (e) => {
-        if (e.target === settingsModal) closeSettingsModal();
-    });
+    
 
     // Bottom Navigation (Mobile)
     const bottomNav = document.getElementById('bottom-nav');
@@ -584,20 +580,44 @@ function handleThemeChange() {
     saveSettings();
 }
 
+
+    const addModal = document.getElementById('add-modal');
+    const addClose = document.getElementById('add-close');
+    const dashboardAddBtn = document.getElementById('dashboard-add-btn');
+
+    if (addClose) {
+        addClose.addEventListener('click', () => {
+            addModal.classList.remove('active');
+        });
+    }
+
+    if (addModal) {
+        addModal.addEventListener('click', (e) => {
+            if (e.target === addModal) addModal.classList.remove('active');
+        });
+    }
+
+    if (dashboardAddBtn) {
+        dashboardAddBtn.addEventListener('click', () => {
+            if (addModal) addModal.classList.add('active');
+        });
+    }
+
 // ===== Mobile Navigation =====
 function handleNavigation(page) {
-    // Update active nav item
+    // Handle special popup pages first
+    if (page === 'add') {
+        const addModal = document.getElementById('add-modal');
+        if (addModal) addModal.classList.add('active');
+        return;
+    }
+
+    // Update active nav item for regular pages
     const bottomNav = document.getElementById('bottom-nav');
     if (bottomNav) {
         bottomNav.querySelectorAll('.nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === page);
         });
-    }
-
-    // Handle special pages
-    if (page === 'settings') {
-        openSettingsModal();
-        return;
     }
 
     // Show/hide page sections
@@ -1312,7 +1332,14 @@ async function handleAddExpense(e) {
     expenseAmount.value = '';
     expenseDescription.value = '';
     expenseSubcategory.value = '';
-    expenseAmount.focus();
+    
+    // Close modal and notify
+    const addModal = document.getElementById('add-modal');
+    if (addModal) addModal.classList.remove('active');
+    
+    // Optional: navigate to history or dashboard if we want, or just show toast
+    showToast('Entry logged successfully!', 'success');
+
 }
 
 // ===== Render Expenses =====
