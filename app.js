@@ -1755,20 +1755,10 @@ function importFromCSV(file) {
                 }
 
                 // Validate and normalize date format
-                // Try to extract a YYYY-MM-DD string without going through UTC
-                let formattedDate;
-                const isoMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                if (isoMatch) {
-                    // Already YYYY-MM-DD
-                    formattedDate = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-                } else {
-                    // Try parsing other formats, but use local date parts to avoid timezone shift
-                    const parsedDate = new Date(date);
-                    if (isNaN(parsedDate.getTime())) {
-                        errors.push(`Row ${i + 1}: Invalid date format`);
-                        continue;
-                    }
-                    formattedDate = getLocalDateString(parsedDate);
+                const formattedDate = normalizeDateString(date);
+                if (!formattedDate || !formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    errors.push(`Row ${i + 1}: Invalid date format`);
+                    continue;
                 }
 
                 newExpenses.push({
@@ -1959,13 +1949,6 @@ function normalizeDateString(dateStr) {
     // Already in YYYY-MM-DD format — return as-is
     const isoMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (isoMatch) return dateStr;
-
-    // Has YYYY-MM-DD at the start (e.g. "2026-05-07T18:00:00.000Z")
-    // Manually extract the date portion to avoid UTC shift
-    const isoDateTimeMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})T/);
-    if (isoDateTimeMatch) {
-        return `${isoDateTimeMatch[1]}-${isoDateTimeMatch[2]}-${isoDateTimeMatch[3]}`;
-    }
 
     // Fallback: parse and convert using local timezone
     const parsed = new Date(dateStr);
