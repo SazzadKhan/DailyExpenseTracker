@@ -503,19 +503,27 @@ function setupEventListeners() {
         budgetAlert.classList.remove('visible');
     });
 
-    // Chart tabs
-    document.querySelectorAll('.chart-tab').forEach(tab => {
-        tab.addEventListener('click', () => switchChartTab(tab.dataset.chart));
-    });
+    // Chart tabs logic removed since we separated the charts
 
-    // Shared month filter for Group 1
-    document.getElementById('analytics-month-select').addEventListener('change', () => {
-        renderCategoryChart();
-        renderDailyChart();
-        updateAnalyticsInsights();
-    });
+    // Dashboard month filter
+    const dashboardSelect = document.getElementById('dashboard-month-select');
+    if (dashboardSelect) {
+        dashboardSelect.addEventListener('change', () => {
+            renderDailyChart();
+        });
+    }
+
+    // Analytics month filter
+    const analyticsSelect = document.getElementById('analytics-month-select');
+    if (analyticsSelect) {
+        analyticsSelect.addEventListener('change', () => {
+            renderCategoryChart();
+            updateAnalyticsInsights();
+        });
+    }
 
     // Export and Delete All
+
     exportCsvBtn.addEventListener('click', exportToCSV);
     deleteAllBtn.addEventListener('click', handleDeleteAll);
 
@@ -941,20 +949,9 @@ function checkBudgetAlert() {
 
 // ===== Charts =====
 function switchChartTab(chart) {
-    document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`[data-chart="${chart}"]`).classList.add('active');
-
-    // Only toggle Group 1 chart wrappers (category and daily)
-    const group1Wrappers = ['category-chart-wrapper', 'daily-chart-wrapper'];
-    group1Wrappers.forEach(id => {
-        document.getElementById(id).classList.add('hidden');
-    });
-    document.getElementById(`${chart}-chart-wrapper`).classList.remove('hidden');
-
-    // Re-render the chart to ensure correct dimensions
-    if (chart === 'category') renderCategoryChart();
-    if (chart === 'daily') renderDailyChart();
+    // Deprecated: Charts are now separated into different pages
 }
+
 
 function renderCharts() {
     renderCategoryChart();
@@ -963,11 +960,8 @@ function renderCharts() {
     updateAnalyticsInsights();
 }
 
-function renderCategoryChart() {
-    const ctx = document.getElementById('category-chart').getContext('2d');
-    const monthSelect = document.getElementById('analytics-month-select');
-
-    // Populate month options from available expense data
+function populateMonthSelector(selectEl) {
+    if (!selectEl) return;
     const months = new Set();
     expenses.forEach(exp => {
         const m = exp.date.substring(0, 7);
@@ -975,27 +969,33 @@ function renderCategoryChart() {
     });
 
     const sortedMonths = [...months].sort().reverse();
-    const currentValue = monthSelect.value;
+    const currentValue = selectEl.value;
 
-    monthSelect.innerHTML = '<option value="all">All Time</option>';
+    selectEl.innerHTML = '<option value="all">All Time</option>';
     sortedMonths.forEach(m => {
         const [year, month] = m.split('-');
         const label = new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         const option = document.createElement('option');
         option.value = m;
         option.textContent = label;
-        monthSelect.appendChild(option);
+        selectEl.appendChild(option);
     });
 
-    // Default to current month on first render, preserve selection otherwise
     if (currentValue && (currentValue === 'all' || sortedMonths.includes(currentValue))) {
-        monthSelect.value = currentValue;
+        selectEl.value = currentValue;
     } else if (sortedMonths.length > 0) {
-        monthSelect.value = sortedMonths[0]; // current/latest month
+        selectEl.value = sortedMonths[0]; // current/latest month
     }
+}
+
+function renderCategoryChart() {
+    const ctx = document.getElementById('category-chart').getContext('2d');
+    const monthSelect = document.getElementById('analytics-month-select');
+    
+    if (monthSelect) populateMonthSelector(monthSelect);
+    const selectedMonth = monthSelect ? monthSelect.value : 'all';
 
     // Filter expenses by selected month
-    const selectedMonth = monthSelect.value;
     let filtered = expenses;
     if (selectedMonth !== 'all') {
         filtered = expenses.filter(e => e.date.substring(0, 7) === selectedMonth);
@@ -1052,7 +1052,10 @@ function renderCategoryChart() {
 
 function renderDailyChart() {
     const ctx = document.getElementById('daily-chart').getContext('2d');
-    const selectedMonth = document.getElementById('analytics-month-select').value;
+    const monthSelect = document.getElementById('dashboard-month-select');
+    
+    if (monthSelect) populateMonthSelector(monthSelect);
+    const selectedMonth = monthSelect ? monthSelect.value : 'all';
 
     const days = [];
 
@@ -1208,9 +1211,11 @@ function updateAnalyticsInsights() {
     const currentMonth = today.substring(0, 7);
     const todayDate = new Date();
 
-    // Selected month for Group 1 (drains)
-    const selectedMonth = document.getElementById('analytics-month-select').value;
-
+    const monthSelect = document.getElementById('analytics-month-select');
+    if (!monthSelect) return;
+    populateMonthSelector(monthSelect);
+    const selectedMonth = monthSelect.value;
+    
     // Drains use selected month, comparison always uses current month
     let drainsExpenses;
     if (selectedMonth !== 'all') {

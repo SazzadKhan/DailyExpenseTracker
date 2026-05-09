@@ -109,15 +109,69 @@
                 </section>
             </div>
 
-            <!-- Dashboard Page (Charts) - Active by default -->
+            <!-- Dashboard Page (Home) - Active by default -->
             <div class="nav-page active" data-page="dashboard">
-
-                <!-- GROUP 1: Monthly Detail View -->
                 <section class="analytics-group">
                     <div class="analytics-group-header">
                         <h2 class="section-title">
+                            <span class="title-icon">📈</span>
+                            Daily Trend
+                        </h2>
+                        <select id="dashboard-month-select" class="chart-month-select">
+                            <option value="all">All Time</option>
+                        </select>
+                    </div>
+
+                    <div class="analytics-group-body">
+                        <div class="analytics-col-charts" style="flex: 1; max-width: 100%;">
+                            <div class="charts-container">
+                                <div class="chart-wrapper" id="daily-chart-wrapper">
+                                    <canvas id="daily-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- GROUP 2: Overview -->
+                <section class="analytics-group analytics-group-overview">
+                    <div class="analytics-group-header">
+                        <h2 class="section-title">
                             <span class="title-icon">📅</span>
-                            Monthly Breakdown
+                            Monthly Overview
+                        </h2>
+                    </div>
+
+                    <div class="analytics-group-body">
+                        <div class="analytics-col-charts">
+                            <div class="chart-wrapper" id="monthly-chart-wrapper">
+                                <canvas id="monthly-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="analytics-col-comparison">
+                            <div class="insight-card insight-comparison">
+                                <div class="insight-header">
+                                    <span class="insight-icon">⚖️</span>
+                                    <span class="insight-title">vs Last Month</span>
+                                </div>
+                                <div class="comparison-list" id="comparison-list">
+                                    <div class="comparison-empty">No data to compare yet</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+
+            <!-- Analytics Page (Deep Dive) -->
+            <div class="nav-page" data-page="analytics">
+                <!-- GROUP 1: Category Breakdown -->
+                <section class="analytics-group">
+                    <div class="analytics-group-header">
+                        <h2 class="section-title">
+                            <span class="title-icon">📊</span>
+                            Category Breakdown
                         </h2>
                         <select id="analytics-month-select" class="chart-month-select">
                             <option value="all">All Time</option>
@@ -126,16 +180,9 @@
 
                     <div class="analytics-group-body">
                         <div class="analytics-col-charts">
-                            <div class="chart-tabs">
-                                <button class="chart-tab active" data-chart="category">By Category</button>
-                                <button class="chart-tab" data-chart="daily">Daily Trend</button>
-                            </div>
                             <div class="charts-container">
                                 <div class="chart-wrapper" id="category-chart-wrapper">
                                     <canvas id="category-chart"></canvas>
-                                </div>
-                                <div class="chart-wrapper hidden" id="daily-chart-wrapper">
-                                    <canvas id="daily-chart"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -152,37 +199,8 @@
                         </div>
                     </div>
                 </section>
-
-                <!-- GROUP 2: Overview -->
-                <section class="analytics-group analytics-group-overview">
-                    <div class="analytics-group-header">
-                        <h2 class="section-title">
-                            <span class="title-icon">📈</span>
-                            Overview
-                        </h2>
-                    </div>
-
-                    <div class="analytics-group-body">
-                        <div class="analytics-col-charts">
-                            <div class="chart-wrapper" id="monthly-chart-wrapper">
-                                <canvas id="monthly-chart"></canvas>
-                            </div>
-                        </div>
-                        <div class="analytics-col-comparison">
-                            <div class="insight-card insight-comparison">
-                                <div class="insight-header">
-                                    <span class="insight-icon">📊</span>
-                                    <span class="insight-title">vs Last Month</span>
-                                </div>
-                                <div class="comparison-list" id="comparison-list">
-                                    <div class="comparison-empty">No data to compare yet</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
             </div>
+
 
             <!-- History Page (Filter + Table) -->
             <div class="nav-page" data-page="history">
@@ -478,10 +496,15 @@
     <!-- Mobile Bottom Navigation -->
     <nav class="bottom-nav" id="bottom-nav">
         <button class="nav-item active" data-page="dashboard">
-            <span class="nav-icon">📊</span>
-            <span class="nav-label">Dashboard</span>
+            <span class="nav-icon">🏠</span>
+            <span class="nav-label">Home</span>
+        </button>
+        <button class="nav-item" data-page="analytics">
+            <span class="nav-icon">📈</span>
+            <span class="nav-label">Analytics</span>
         </button>
         <button class="nav-item" data-page="add">
+
             <span class="nav-icon">➕</span>
             <span class="nav-label">Add</span>
         </button>

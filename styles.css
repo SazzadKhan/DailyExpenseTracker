@@ -2141,9 +2141,9 @@ body {
     flex: 1;
 }
 
-/* ===== Mobile Bottom Navigation ===== */
+/* ===== Bottom Navigation (Global) ===== */
 .bottom-nav {
-    display: none;
+    display: flex;
     position: fixed;
     bottom: 0;
     left: 0;
@@ -2194,37 +2194,23 @@ body {
     font-weight: 500;
 }
 
-/* Show bottom nav on mobile only */
-@media (max-width: 768px) {
-    .bottom-nav {
-        display: flex;
-    }
-
-    /* Add padding to body to prevent content from being hidden behind nav */
-    .app-container {
-        padding-bottom: 80px;
-    }
-
-    /* Hide header settings button on mobile (use bottom nav instead) */
-    .btn-settings {
-        display: none;
-    }
+/* Add padding to body to prevent content from being hidden behind nav */
+.app-container {
+    padding-bottom: 80px;
 }
 
-/* ===== Mobile Page Sections ===== */
+/* Hide header settings button (use bottom nav instead) */
+.btn-settings {
+    display: none;
+}
+
+/* ===== Page Sections ===== */
 .nav-page {
     display: none;
 }
 
 .nav-page.active {
     display: block;
-}
-
-/* On desktop, show all sections (no page switching) */
-@media (min-width: 769px) {
-    .nav-page {
-        display: block !important;
-    }
 }
 
 /* ===== Category Color Badges ===== */
