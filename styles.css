@@ -608,6 +608,32 @@ body {
     font-weight: 700;
 }
 
+/* ===== Dashboard Grid Layout ===== */
+.dashboard-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+@media (min-width: 769px) {
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-items: stretch;
+    }
+    .dashboard-grid .analytics-group {
+        margin-bottom: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .dashboard-grid .analytics-group-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+}
+
 /* ===== Analytics Group Layout ===== */
 .analytics-group {
     background: var(--bg-card);

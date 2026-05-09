@@ -1207,16 +1207,12 @@ function renderMonthlyChart() {
 
 
 function updateAnalyticsInsights() {
-    const today = getLocalDateString(new Date());
-    const currentMonth = today.substring(0, 7);
-    const todayDate = new Date();
-
     const monthSelect = document.getElementById('analytics-month-select');
     if (!monthSelect) return;
     populateMonthSelector(monthSelect);
     const selectedMonth = monthSelect.value;
     
-    // Drains use selected month, comparison always uses current month
+    // Drains use selected month
     let drainsExpenses;
     if (selectedMonth !== 'all') {
         drainsExpenses = expenses.filter(e => e.date.substring(0, 7) === selectedMonth);
@@ -1224,73 +1220,6 @@ function updateAnalyticsInsights() {
         drainsExpenses = expenses;
     }
 
-    // Current month expenses for vs Last Month comparison
-    const monthExpenses = expenses.filter(e => e.date.substring(0, 7) === currentMonth);
-    const monthSum = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
-
-    // --- Month vs Last Month ---
-    const lastMonthDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
-    const lastMonth = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
-    const lastMonthExpenses = expenses.filter(e => e.date.substring(0, 7) === lastMonth);
-
-    const comparisonList = document.getElementById('comparison-list');
-
-    // Build category totals for both months
-    const thisMonthCats = {};
-    const lastMonthCats = {};
-
-    monthExpenses.forEach(e => {
-        thisMonthCats[e.category] = (thisMonthCats[e.category] || 0) + parseFloat(e.amount);
-    });
-    lastMonthExpenses.forEach(e => {
-        lastMonthCats[e.category] = (lastMonthCats[e.category] || 0) + parseFloat(e.amount);
-    });
-
-    const allCats = new Set([...Object.keys(thisMonthCats), ...Object.keys(lastMonthCats)]);
-
-    if (allCats.size === 0) {
-        comparisonList.innerHTML = '<div class="comparison-empty">No data to compare yet</div>';
-    } else {
-        // Sort by this month's total descending
-        const sorted = [...allCats].sort((a, b) => (thisMonthCats[b] || 0) - (thisMonthCats[a] || 0));
-        comparisonList.innerHTML = '';
-
-        sorted.forEach(cat => {
-            const thisVal = thisMonthCats[cat] || 0;
-            const lastVal = lastMonthCats[cat] || 0;
-            const catData = categories[cat] || { icon: '📋' };
-
-            let changeHtml = '';
-            if (lastVal === 0 && thisVal > 0) {
-                changeHtml = '<span class="comparison-change up">🆕 New</span>';
-            } else if (lastVal > 0 && thisVal === 0) {
-                changeHtml = '<span class="comparison-change down">↓ 100%</span>';
-            } else if (lastVal > 0) {
-                const pctChange = ((thisVal - lastVal) / lastVal) * 100;
-                if (Math.abs(pctChange) < 1) {
-                    changeHtml = '<span class="comparison-change same">— same</span>';
-                } else if (pctChange > 0) {
-                    changeHtml = `<span class="comparison-change up">↑ ${Math.round(pctChange)}%</span>`;
-                } else {
-                    changeHtml = `<span class="comparison-change down">↓ ${Math.round(Math.abs(pctChange))}%</span>`;
-                }
-            }
-
-            const item = document.createElement('div');
-            item.className = 'comparison-item';
-            item.innerHTML = `
-                <span class="comparison-cat">
-                    <span class="comparison-cat-icon">${catData.icon}</span>
-                    ${cat}
-                </span>
-                <div class="comparison-amounts">
-                    <span class="comparison-value">${formatCurrency(thisVal)}</span>
-                    ${changeHtml}
-                </div>
-            `;
-            comparisonList.appendChild(item);
-        });
-    }
 
     // --- Top Money Drains ---
     const drainsList = document.getElementById('drains-list');
