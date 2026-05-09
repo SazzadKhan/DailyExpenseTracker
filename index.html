@@ -227,102 +227,6 @@
             </div>
         </main>
 
-        <!-- Footer -->
-        <footer class="footer">
-            <p>Daily Expense Tracker &copy; 2026 | Your Personal Finance Companion</p>
-        </footer>
-    </div>
-
-    <!-- Add Page (Input Form) -->
-            <div class="modal" id="add-modal">
-                <div class="modal-content modal-large">
-                    <div class="modal-header">
-                <h3>➕ Add New Transaction</h3>
-                <button class="modal-close" id="add-close">&times;</button>
-            </div>
-                    <form id="expense-form" class="expense-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="expense-date">Date</label>
-                                <input type="date" id="expense-date" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="expense-category">Category</label>
-                                <select id="expense-category" required>
-                                    <!-- Categories populated by JS -->
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="expense-subcategory">Subcategory</label>
-                                <select id="expense-subcategory" required>
-                                    <option value="">Select Subcategory</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="expense-amount">Amount <span id="amount-currency">($)</span></label>
-                                <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00"
-                                    required>
-                            </div>
-                            <div class="form-group form-group-wide">
-                                <label for="expense-description">Description / Note</label>
-                                <input type="text" id="expense-description" placeholder="Enter description or note..."
-                                    maxlength="200">
-                            </div>
-                            <div class="form-group form-group-button">
-                                <button type="submit" class="btn-add" id="btn-add-transaction">
-                                    <span class="btn-icon">+</span>
-                                    Add Transaction
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            
-    <!-- Edit Modal -->
-    <div class="modal" id="edit-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Edit Expense</h3>
-                <button class="modal-close" id="modal-close">&times;</button>
-            </div>
-            <form id="edit-form" class="expense-form">
-                <input type="hidden" id="edit-id">
-                <div class="form-group">
-                    <label for="edit-date">Date</label>
-                    <input type="date" id="edit-date" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-category">Category</label>
-                    <select id="edit-category" required>
-                        <!-- Categories populated by JS -->
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="edit-subcategory">Subcategory</label>
-                    <select id="edit-subcategory" required>
-                        <option value="">Select Subcategory</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="edit-amount">Amount <span class="edit-currency">($)</span></label>
-                    <input type="number" id="edit-amount" step="0.01" min="0" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-description">Description / Note</label>
-                    <input type="text" id="edit-description" maxlength="200">
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn-cancel" id="modal-cancel">Cancel</button>
-                    <button type="submit" class="btn-save">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- Settings Modal -->
     <div class="nav-page" data-page="settings">
         <section class="analytics-group">
@@ -473,6 +377,102 @@
                             Profile
                         </h2>
                     </div>
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Daily Expense Tracker &copy; 2026 | Your Personal Finance Companion</p>
+        </footer>
+    </div>
+
+    <!-- Add Page (Input Form) -->
+            <div class="modal" id="add-modal">
+                <div class="modal-content modal-large">
+                    <div class="modal-header">
+                <h3>➕ Add New Transaction</h3>
+                <button class="modal-close" id="add-close">&times;</button>
+            </div>
+                    <form id="expense-form" class="expense-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="expense-date">Date</label>
+                                <input type="date" id="expense-date" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="expense-category">Category</label>
+                                <select id="expense-category" required>
+                                    <!-- Categories populated by JS -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="expense-subcategory">Subcategory</label>
+                                <select id="expense-subcategory" required>
+                                    <option value="">Select Subcategory</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="expense-amount">Amount <span id="amount-currency">($)</span></label>
+                                <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00"
+                                    required>
+                            </div>
+                            <div class="form-group form-group-wide">
+                                <label for="expense-description">Description / Note</label>
+                                <input type="text" id="expense-description" placeholder="Enter description or note..."
+                                    maxlength="200">
+                            </div>
+                            <div class="form-group form-group-button">
+                                <button type="submit" class="btn-add" id="btn-add-transaction">
+                                    <span class="btn-icon">+</span>
+                                    Add Transaction
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            
+    <!-- Edit Modal -->
+    <div class="modal" id="edit-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Expense</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <form id="edit-form" class="expense-form">
+                <input type="hidden" id="edit-id">
+                <div class="form-group">
+                    <label for="edit-date">Date</label>
+                    <input type="date" id="edit-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-category">Category</label>
+                    <select id="edit-category" required>
+                        <!-- Categories populated by JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-subcategory">Subcategory</label>
+                    <select id="edit-subcategory" required>
+                        <option value="">Select Subcategory</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-amount">Amount <span class="edit-currency">($)</span></label>
+                    <input type="number" id="edit-amount" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-description">Description / Note</label>
+                    <input type="text" id="edit-description" maxlength="200">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="modal-cancel">Cancel</button>
+                    <button type="submit" class="btn-save">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
                     <div class="analytics-group-body">
                         <p style="color: var(--text-secondary); text-align: center; padding: 40px;">Profile page coming soon!</p>
                     </div>
