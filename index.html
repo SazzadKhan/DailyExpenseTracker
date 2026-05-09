@@ -26,7 +26,7 @@
                         <span class="sync-status" id="sync-status">📴 Offline mode</span>
                         <button class="btn-sync" id="sync-btn" title="Sync with cloud">🔄</button>
                     </div>
-                    <button class="btn-settings" id="settings-btn">⚙️ Settings</button>
+                    <button class="btn-add" id="header-add-btn" style="padding: 8px 16px; font-size: 0.9rem; margin-left: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">➕ Log Entry</button>
                 </div>
             </div>
             <div class="header-stats">
@@ -61,14 +61,11 @@
             <div class="nav-page active" data-page="dashboard">
                 <div class="dashboard-grid">
                     <section class="analytics-group">
-                        <div class="analytics-group-header" style="justify-content: space-between; align-items: center; width: 100%;">
-                            <div style="display: flex; gap: 15px; align-items: center;">
-                                <h2 class="section-title" style="margin: 0;">
-                                    <span class="title-icon">📈</span>
-                                    Daily Trend
-                                </h2>
-                                <button id="dashboard-add-btn" class="btn-add" style="padding: 6px 12px; font-size: 0.9rem; margin: 0;">➕ Log Entry</button>
-                            </div>
+                        <div class="analytics-group-header">
+                            <h2 class="section-title">
+                                <span class="title-icon">📈</span>
+                                Daily Trend
+                            </h2>
                             <select id="dashboard-month-select" class="chart-month-select">
                                 <option value="all">All Time</option>
                             </select>

@@ -583,7 +583,7 @@ function handleThemeChange() {
 
     const addModal = document.getElementById('add-modal');
     const addClose = document.getElementById('add-close');
-    const dashboardAddBtn = document.getElementById('dashboard-add-btn');
+    const headerAddBtn = document.getElementById('header-add-btn');
 
     if (addClose) {
         addClose.addEventListener('click', () => {
@@ -597,8 +597,8 @@ function handleThemeChange() {
         });
     }
 
-    if (dashboardAddBtn) {
-        dashboardAddBtn.addEventListener('click', () => {
+    if (headerAddBtn) {
+        headerAddBtn.addEventListener('click', () => {
             if (addModal) addModal.classList.add('active');
         });
     }
