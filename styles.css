@@ -633,10 +633,12 @@ body {
         flex: 1;
         display: flex;
         flex-direction: column;
+        width: 100%;
     }
     .dashboard-grid .chart-wrapper {
         flex: 1;
         min-height: 350px; /* Taller on desktop */
+        width: 100%;
     }
 }
 
