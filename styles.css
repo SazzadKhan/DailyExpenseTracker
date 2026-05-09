@@ -164,6 +164,7 @@ body {
     box-shadow: var(--shadow-xl);
     position: relative;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .header::before {
