@@ -2233,14 +2233,58 @@ body {
     font-weight: 500;
 }
 
-/* Add padding to body to prevent content from being hidden behind nav */
-.app-container {
-    padding-bottom: 80px;
-}
-
-/* Hide header settings button (use bottom nav instead) */
+/* Hide header settings button globally (use nav instead) */
 .btn-settings {
     display: none;
+}
+
+/* Mobile-only Nav Padding */
+@media (max-width: 768px) {
+    .app-container {
+        padding-bottom: 80px;
+    }
+}
+
+/* Desktop Sidebar Navigation */
+@media (min-width: 769px) {
+    body {
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+    }
+    .app-container {
+        flex: 1;
+        height: 100vh;
+        overflow-y: auto;
+        margin: 0 auto;
+        padding-bottom: 20px;
+    }
+    .bottom-nav {
+        order: -1;
+        position: static;
+        flex-direction: column;
+        width: 250px;
+        height: 100vh;
+        justify-content: flex-start;
+        align-items: flex-start;
+        border-top: none;
+        border-right: 1px solid var(--border);
+        padding: 30px 0;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+    }
+    .bottom-nav .nav-item {
+        flex: none;
+        width: 100%;
+        flex-direction: row;
+        padding: 15px 30px;
+        justify-content: flex-start;
+    }
+    .bottom-nav .nav-icon {
+        margin-right: 15px;
+    }
+    .bottom-nav .nav-label {
+        font-size: 1rem;
+    }
 }
 
 /* ===== Page Sections ===== */
