@@ -534,6 +534,19 @@ function setupEventListeners() {
         });
     });
 
+    // Category view toggle (grid = icon only, list = icon + name)
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            try { localStorage.setItem('categoryPickerView', view); } catch (_) {}
+            const grid = document.getElementById('expense-category-grid');
+            if (grid) grid.dataset.view = view;
+            document.querySelectorAll('.view-toggle-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.view === view);
+            });
+        });
+    });
+
     const addCancelBtn = document.getElementById('add-cancel');
     if (addCancelBtn) {
         addCancelBtn.addEventListener('click', () => {
@@ -1470,6 +1483,15 @@ function buildAddCategoryPicker() {
     const grid = document.getElementById('expense-category-grid');
     if (!grid) return;
     grid.innerHTML = '';
+
+    // Apply persisted view mode (grid = icon only, list = icon + name)
+    const savedView = (() => {
+        try { return localStorage.getItem('categoryPickerView') || 'grid'; } catch (_) { return 'grid'; }
+    })();
+    grid.dataset.view = savedView;
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === savedView);
+    });
 
     const entries = Object.entries(categories).filter(([name]) => {
         if (currentAddTypeFilter === 'income') return isIncomeCategory(name);

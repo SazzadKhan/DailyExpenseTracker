@@ -87,9 +87,7 @@
                                 <button class="auth-menu-item" id="signout-btn">🚪 Sign out</button>
                             </div>
                         </div>
-                        <span class="sync-status" id="sync-status" hidden></span>
                     </div>
-                    <button class="btn-add" id="header-add-btn" style="padding: 8px 16px; font-size: 0.9rem; margin-left: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">➕ Log Entry</button>
                 </div>
             </div>
             <div class="header-stats">
@@ -108,6 +106,13 @@
                         <div class="budget-bar" id="budget-bar"></div>
                     </div>
                 </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn-header-add" id="header-add-btn">
+                    <span class="btn-header-add-icon">＋</span>
+                    <span class="btn-header-add-label">Log Entry</span>
+                </button>
+                <span class="sync-status" id="sync-status" hidden></span>
             </div>
         </header>
 
@@ -601,20 +606,13 @@
     <div class="modal" id="add-modal">
         <div class="modal-content modal-large add-modal-content">
             <div class="modal-header">
-                <h3>➕ Add New Transaction</h3>
+                <h3>＋ New Transaction</h3>
                 <button class="modal-close" id="add-close">&times;</button>
             </div>
             <form id="expense-form" class="expense-form smart-form">
                 <!-- Hidden inputs hold the picker values -->
                 <input type="hidden" id="expense-category" required>
                 <input type="hidden" id="expense-subcategory" required>
-
-                <!-- Amount: big and front-and-center -->
-                <div class="amount-hero">
-                    <span class="amount-symbol" id="amount-currency">$</span>
-                    <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00" required
-                        inputmode="decimal" autocomplete="off">
-                </div>
 
                 <!-- Type filter for the category grid -->
                 <div class="type-filter" role="tablist" aria-label="Filter categories">
@@ -627,9 +625,15 @@
                 <div class="picker-section">
                     <div class="picker-label">
                         <span>Category</span>
-                        <span class="picker-selected" id="picker-category-selected">Pick one</span>
+                        <div class="picker-label-right">
+                            <span class="picker-selected" id="picker-category-selected">Pick one</span>
+                            <div class="view-toggle" role="group" aria-label="Category view">
+                                <button type="button" class="view-toggle-btn" data-view="grid" title="Icon grid" aria-label="Icon grid">⠿</button>
+                                <button type="button" class="view-toggle-btn" data-view="list" title="Icon + name list" aria-label="Icon + name list">☰</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="category-picker-grid" id="expense-category-grid">
+                    <div class="category-picker-grid" id="expense-category-grid" data-view="grid">
                         <!-- Tiles populated by JS -->
                     </div>
                 </div>
@@ -645,12 +649,24 @@
                     </div>
                 </div>
 
-                <!-- Date + Description -->
+                <!-- Date + Amount row -->
                 <div class="form-row compact-row">
                     <div class="form-group">
                         <label for="expense-date">📅 Date</label>
                         <input type="date" id="expense-date" required>
                     </div>
+                    <div class="form-group">
+                        <label for="expense-amount">💵 Amount</label>
+                        <div class="amount-inline">
+                            <span class="amount-inline-symbol" id="amount-currency">$</span>
+                            <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00" required
+                                inputmode="decimal" autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div class="form-row compact-row">
                     <div class="form-group form-group-wide">
                         <label for="expense-description">📝 Description / Note</label>
                         <input type="text" id="expense-description" placeholder="Optional note..." maxlength="200"
