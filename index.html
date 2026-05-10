@@ -100,6 +100,40 @@
                         </div>
                     </section>
                 </div>
+
+                <!-- NEW: Recent Transactions on Dashboard -->
+                <section class="table-section" style="margin-top: 30px;">
+                    <div class="table-header">
+                        <h2 class="section-title">
+                            <span class="title-icon">⏱️</span>
+                            Recent Activity
+                        </h2>
+                    </div>
+                    <div class="table-container">
+                        <table class="expense-table" id="recent-expense-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Category</th>
+                                    <th>Subcategory</th>
+                                    <th>Amount</th>
+                                    <th>Description / Note</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-expense-tbody">
+                                <!-- Recent expenses will be inserted here -->
+                            </tbody>
+                        </table>
+                        <div class="expense-cards" id="recent-expense-cards">
+                            <!-- Cards will be rendered by JS -->
+                        </div>
+                        <div class="empty-state" id="recent-empty-state">
+                            <div class="empty-icon">📝</div>
+                            <h3>No recent activity</h3>
+                        </div>
+                    </div>
+                </section>
             </div>
 
 
@@ -384,52 +418,75 @@
     </div>
 
     <!-- Add Page (Input Form) -->
-            <div class="modal" id="add-modal">
-                <div class="modal-content modal-large">
-                    <div class="modal-header">
+    <div class="modal" id="add-modal">
+        <div class="modal-content modal-large add-modal-content">
+            <div class="modal-header">
                 <h3>➕ Add New Transaction</h3>
                 <button class="modal-close" id="add-close">&times;</button>
             </div>
-                    <form id="expense-form" class="expense-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="expense-date">Date</label>
-                                <input type="date" id="expense-date" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="expense-category">Category</label>
-                                <select id="expense-category" required>
-                                    <!-- Categories populated by JS -->
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="expense-subcategory">Subcategory</label>
-                                <select id="expense-subcategory" required>
-                                    <option value="">Select Subcategory</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="expense-amount">Amount <span id="amount-currency">($)</span></label>
-                                <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00"
-                                    required>
-                            </div>
-                            <div class="form-group form-group-wide">
-                                <label for="expense-description">Description / Note</label>
-                                <input type="text" id="expense-description" placeholder="Enter description or note..."
-                                    maxlength="200">
-                            </div>
-                            <div class="form-group form-group-button">
-                                <button type="submit" class="btn-add" id="btn-add-transaction">
-                                    <span class="btn-icon">+</span>
-                                    Add Transaction
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+            <form id="expense-form" class="expense-form smart-form">
+                <!-- Hidden inputs hold the picker values -->
+                <input type="hidden" id="expense-category" required>
+                <input type="hidden" id="expense-subcategory" required>
+
+                <!-- Amount: big and front-and-center -->
+                <div class="amount-hero">
+                    <span class="amount-symbol" id="amount-currency">$</span>
+                    <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00" required
+                        inputmode="decimal" autocomplete="off">
                 </div>
-            </div>
+
+                <!-- Type filter for the category grid -->
+                <div class="type-filter" role="tablist" aria-label="Filter categories">
+                    <button type="button" class="type-filter-btn active" data-type="expense" role="tab">💸 Expense</button>
+                    <button type="button" class="type-filter-btn" data-type="income" role="tab">💰 Income</button>
+                    <button type="button" class="type-filter-btn" data-type="all" role="tab">All</button>
+                </div>
+
+                <!-- Visual category picker -->
+                <div class="picker-section">
+                    <div class="picker-label">
+                        <span>Category</span>
+                        <span class="picker-selected" id="picker-category-selected">Pick one</span>
+                    </div>
+                    <div class="category-picker-grid" id="expense-category-grid">
+                        <!-- Tiles populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Subcategory chips -->
+                <div class="picker-section" id="subcategory-section" style="display:none;">
+                    <div class="picker-label">
+                        <span>Subcategory</span>
+                        <span class="picker-selected" id="picker-subcategory-selected">Pick one</span>
+                    </div>
+                    <div class="subcategory-chips" id="expense-subcategory-chips">
+                        <!-- Chips populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Date + Description -->
+                <div class="form-row compact-row">
+                    <div class="form-group">
+                        <label for="expense-date">📅 Date</label>
+                        <input type="date" id="expense-date" required>
+                    </div>
+                    <div class="form-group form-group-wide">
+                        <label for="expense-description">📝 Description / Note</label>
+                        <input type="text" id="expense-description" placeholder="Optional note..." maxlength="200"
+                            autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="add-cancel">Cancel</button>
+                    <button type="submit" class="btn-save btn-add-primary" id="btn-add-transaction">
+                        <span class="btn-icon">＋</span> Add Transaction
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
             
     <!-- Edit Modal -->

@@ -409,10 +409,22 @@ function setupEventListeners() {
     // Form submission
     expenseForm.addEventListener('submit', handleAddExpense);
 
-    // Category change - update subcategories
-    expenseCategory.addEventListener('change', () => {
-        updateSubcategories(expenseCategory.value, expenseSubcategory);
+    // Smart Add-modal picker setup (type filter buttons)
+    document.querySelectorAll('.type-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.type-filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentAddTypeFilter = btn.dataset.type;
+            buildAddCategoryPicker();
+        });
     });
+
+    const addCancelBtn = document.getElementById('add-cancel');
+    if (addCancelBtn) {
+        addCancelBtn.addEventListener('click', () => {
+            document.getElementById('add-modal').classList.remove('active');
+        });
+    }
 
     editCategory.addEventListener('change', () => {
         updateSubcategories(editCategory.value, editSubcategory);
@@ -599,7 +611,7 @@ function handleThemeChange() {
 
     if (headerAddBtn) {
         headerAddBtn.addEventListener('click', () => {
-            if (addModal) addModal.classList.add('active');
+            openAddModal();
         });
     }
 
@@ -607,8 +619,7 @@ function handleThemeChange() {
 function handleNavigation(page) {
     // Handle special popup pages first
     if (page === 'add') {
-        const addModal = document.getElementById('add-modal');
-        if (addModal) addModal.classList.add('active');
+        openAddModal();
         return;
     }
 
@@ -631,7 +642,7 @@ function handleNavigation(page) {
 
 function updateCurrencyDisplay() {
     const currency = currencies[settings.currency];
-    amountCurrency.textContent = `(${currency.symbol})`;
+    if (amountCurrency) amountCurrency.textContent = currency.symbol;
     document.querySelectorAll('.edit-currency').forEach(el => {
         el.textContent = `(${currency.symbol})`;
     });
@@ -658,10 +669,13 @@ function isIncomeCategory(name) {
 }
 
 function populateCategoryDropdowns() {
-    const dropdowns = [expenseCategory, editCategory, filterCategory, subcategoryCategory];
+    // expenseCategory is now a hidden input driven by the visual picker — rebuild it instead
+    buildAddCategoryPicker();
+
+    const dropdowns = [editCategory, filterCategory, subcategoryCategory];
 
     dropdowns.forEach((dropdown, index) => {
-        const isFilter = index === 2;
+        const isFilter = index === 1;
         dropdown.innerHTML = isFilter
             ? '<option value="">All Categories</option>'
             : '<option value="">Select Category</option>';
@@ -1296,12 +1310,152 @@ function generateColors(count) {
     return colors;
 }
 
+// ===== Smart Add-Modal Picker =====
+let currentAddTypeFilter = 'expense'; // 'expense' | 'income' | 'all'
+
+function openAddModal() {
+    const addModal = document.getElementById('add-modal');
+    if (!addModal) return;
+
+    // Reset form fields
+    if (expenseForm) expenseForm.reset();
+    expenseCategory.value = '';
+    expenseSubcategory.value = '';
+
+    // Default date = today (local)
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    expenseDate.value = `${yyyy}-${mm}-${dd}`;
+
+    // Reset selected labels
+    const catSel = document.getElementById('picker-category-selected');
+    const subSel = document.getElementById('picker-subcategory-selected');
+    if (catSel) catSel.textContent = 'Pick one';
+    if (subSel) subSel.textContent = 'Pick one';
+
+    // Hide subcategory section until a category is chosen
+    const subSection = document.getElementById('subcategory-section');
+    if (subSection) subSection.style.display = 'none';
+    const subChips = document.getElementById('expense-subcategory-chips');
+    if (subChips) subChips.innerHTML = '';
+
+    // Reset type filter to expense by default
+    currentAddTypeFilter = 'expense';
+    document.querySelectorAll('.type-filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.type === currentAddTypeFilter);
+    });
+
+    buildAddCategoryPicker();
+    addModal.classList.add('active');
+
+    // Focus amount for fast entry
+    setTimeout(() => { if (expenseAmount) expenseAmount.focus(); }, 50);
+}
+
+function buildAddCategoryPicker() {
+    const grid = document.getElementById('expense-category-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const entries = Object.entries(categories).filter(([name]) => {
+        if (currentAddTypeFilter === 'income') return isIncomeCategory(name);
+        if (currentAddTypeFilter === 'expense') return !isIncomeCategory(name);
+        return true;
+    });
+
+    if (entries.length === 0) {
+        grid.innerHTML = '<div class="picker-empty">No categories. Add some in Settings → Categories.</div>';
+        return;
+    }
+
+    entries.forEach(([name, data]) => {
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'category-tile';
+        if (isIncomeCategory(name)) tile.classList.add('is-income');
+        if (expenseCategory.value === name) tile.classList.add('selected');
+        tile.dataset.category = name;
+        tile.innerHTML = `
+            <span class="tile-icon">${data.icon}</span>
+            <span class="tile-name">${name}</span>
+        `;
+        tile.addEventListener('click', () => selectAddCategory(name));
+        grid.appendChild(tile);
+    });
+}
+
+function selectAddCategory(name) {
+    expenseCategory.value = name;
+
+    // Update tile selection visuals
+    document.querySelectorAll('#expense-category-grid .category-tile').forEach(t => {
+        t.classList.toggle('selected', t.dataset.category === name);
+    });
+
+    const data = categories[name];
+    const catSel = document.getElementById('picker-category-selected');
+    if (catSel && data) catSel.textContent = `${data.icon} ${name}`;
+
+    // Reset subcategory and rebuild chips
+    expenseSubcategory.value = '';
+    const subSel = document.getElementById('picker-subcategory-selected');
+    if (subSel) subSel.textContent = 'Pick one';
+    buildAddSubcategoryChips(name);
+}
+
+function buildAddSubcategoryChips(category) {
+    const wrap = document.getElementById('expense-subcategory-chips');
+    const section = document.getElementById('subcategory-section');
+    if (!wrap || !section) return;
+    wrap.innerHTML = '';
+
+    if (!category || !categories[category]) {
+        section.style.display = 'none';
+        return;
+    }
+
+    const subs = categories[category].subcategories || [];
+    if (subs.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = '';
+    subs.forEach(sub => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip';
+        chip.textContent = sub;
+        chip.dataset.sub = sub;
+        chip.addEventListener('click', () => {
+            expenseSubcategory.value = sub;
+            wrap.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+            chip.classList.add('selected');
+            const subSel = document.getElementById('picker-subcategory-selected');
+            if (subSel) subSel.textContent = sub;
+        });
+        wrap.appendChild(chip);
+    });
+}
+
 // ===== Add Transaction =====
 async function handleAddExpense(e) {
     e.preventDefault();
 
-    // Derive transaction type from the selected category
+    // Validate picker selections (hidden inputs aren't enforced by the browser)
     const selectedCategory = expenseCategory.value;
+    if (!selectedCategory) {
+        showToast('Please pick a category', 'warning');
+        return;
+    }
+    if (!expenseSubcategory.value) {
+        showToast('Please pick a subcategory', 'warning');
+        return;
+    }
+
+    // Derive transaction type from the selected category
     const transactionType = isIncomeCategory(selectedCategory) ? 'income' : 'expense';
 
     const expense = {
@@ -1382,6 +1536,51 @@ function renderExpenses() {
         return isIncome ? sum + parseFloat(exp.amount) : sum - parseFloat(exp.amount);
     }, 0);
     filteredTotal.textContent = formatCurrency(total);
+
+    renderRecentExpenses();
+}
+
+function renderRecentExpenses() {
+    const recentTbody = document.getElementById('recent-expense-tbody');
+    const recentCardsContainer = document.getElementById('recent-expense-cards');
+    const recentEmptyState = document.getElementById('recent-empty-state');
+    const recentTable = document.getElementById('recent-expense-table');
+    
+    if (!recentTbody) return;
+
+    recentTbody.innerHTML = '';
+    if (recentCardsContainer) recentCardsContainer.innerHTML = '';
+
+    // Sort all expenses by date descending and take top 10
+    const sorted = [...expenses].sort((a, b) => {
+        const dateA = (a.date || '').substring(0, 10);
+        const dateB = (b.date || '').substring(0, 10);
+        if (dateA < dateB) return 1;
+        if (dateA > dateB) return -1;
+        return (b.id || 0) - (a.id || 0); 
+    });
+    
+    const recent10 = sorted.slice(0, 10);
+
+    if (recent10.length === 0) {
+        if (recentEmptyState) recentEmptyState.classList.add('visible');
+        if (recentTable) recentTable.classList.add('table-empty');
+        if (recentCardsContainer) recentCardsContainer.classList.add('table-empty');
+    } else {
+        if (recentEmptyState) recentEmptyState.classList.remove('visible');
+        if (recentTable) recentTable.classList.remove('table-empty');
+        if (recentCardsContainer) recentCardsContainer.classList.remove('table-empty');
+
+        recent10.forEach(expense => {
+            const row = createExpenseRow(expense);
+            recentTbody.appendChild(row);
+
+            if (recentCardsContainer) {
+                const card = createExpenseCard(expense);
+                recentCardsContainer.appendChild(card);
+            }
+        });
+    }
 }
 
 function createExpenseRow(expense) {
