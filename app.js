@@ -1,13 +1,6 @@
 // ===== Expense Tracker Application with Google Sheets Integration =====
-
-// ========================================
-// CONFIGURATION - Set your Google Script URL here
-// ========================================
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxZT8-21_QCOuWISroIXkK9rWkQDjiHKrJ5ATYrYN-SZpMTXpl2bff2bHju0u5KZVNw/exec';
-// ========================================
-
-// Check if Google Sheets is configured
-const isCloudEnabled = GOOGLE_SCRIPT_URL !== 'YOUR_GOOGLE_SCRIPT_URL_HERE' && GOOGLE_SCRIPT_URL.length > 0;
+// Cloud sync uses per-user OAuth (see auth.js + sheets-api.js + storage.js).
+// When signed out, data lives in localStorage only.
 
 // Default categories and subcategories
 const defaultCategories = {
@@ -150,7 +143,6 @@ const alertClose = document.getElementById('alert-close');
 const currencySelect = document.getElementById('currency-select');
 const amountCurrency = document.getElementById('amount-currency');
 const syncStatus = document.getElementById('sync-status');
-const syncBtn = document.getElementById('sync-btn');
 const themeSelect = document.getElementById('theme-select');
 
 // Filter elements
@@ -214,86 +206,48 @@ const deleteAllBtn = document.getElementById('delete-all');
 // Sort state
 let currentSort = { column: 'date', direction: 'desc' };
 
-// ===== Google Sheets API Functions =====
-async function fetchFromCloud(action) {
-    if (!isCloudEnabled) return null;
+// ===== Cloud Sync (delegates to storage adapter — see storage.js) =====
+// When signed out, the storage backend is a no-op and only localStorage is used.
+// When signed in, every mutation is mirrored to the user's own Google Sheet.
 
-    try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=${action}`);
-        const data = await response.json();
-        return data.success ? data : null;
-    } catch (error) {
-        console.error('Cloud fetch error:', error);
-        return null;
-    }
-}
-
-async function postToCloud(action, payload) {
-    if (!isCloudEnabled) return null;
-
-    try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ action, ...payload })
-        });
-
-        // With no-cors mode, we can't read the response
-        // But the request will still be processed by the server
-        return { success: true };
-    } catch (error) {
-        console.error('Cloud post error:', error);
-        return null;
-    }
-}
-
-async function syncFromCloud() {
-    if (!isCloudEnabled || isSyncing) return;
+async function pullFromCloud() {
+    if (!storage.isCloud() || isSyncing) return;
 
     isSyncing = true;
     updateSyncStatus('syncing');
 
     try {
-        // Fetch expenses
-        const expensesData = await fetchFromCloud('getExpenses');
-        if (expensesData && expensesData.expenses && expensesData.expenses.length > 0) {
-            // Normalize dates to YYYY-MM-DD using local timezone
-            // Google Sheets may return dates in different formats (ISO datetime, locale strings, etc.)
-            expenses = expensesData.expenses.map(exp => {
-                if (exp.date) {
-                    exp.date = normalizeDateString(exp.date);
-                }
+        const data = await storage.pullAll();
+        if (data) {
+            // Replace unconditionally — if the sheet is empty, the local copy
+            // should also be empty. Merging-when-empty caused another account's
+            // data to leak between sign-ins.
+            const incoming = Array.isArray(data.expenses) ? data.expenses : [];
+            expenses = incoming.map(exp => {
+                if (exp.date) exp.date = normalizeDateString(exp.date);
                 return exp;
             });
             localStorage.setItem('expenses', JSON.stringify(expenses));
-        }
 
-        // Fetch settings
-        const settingsData = await fetchFromCloud('getSettings');
-        if (settingsData && settingsData.settings && Object.keys(settingsData.settings).length > 0) {
-            settings = { ...settings, ...settingsData.settings };
-            localStorage.setItem('settings', JSON.stringify(settings));
-        } else {
-            // Cloud is empty - push current settings to cloud
-            postToCloud('saveSettings', { settings });
-        }
-
-        // Fetch categories
-        const categoriesData = await fetchFromCloud('getCategories');
-        if (categoriesData && categoriesData.categories && Object.keys(categoriesData.categories).length > 0) {
-            categories = categoriesData.categories;
-            // Backfill Income if the cloud data is missing it, then push back so cloud stays in sync
-            if (!categories['Income']) {
-                categories['Income'] = JSON.parse(JSON.stringify(defaultCategories['Income']));
-                postToCloud('saveCategories', { categories });
+            if (data.settings && Object.keys(data.settings).length > 0) {
+                settings = { ...settings, ...data.settings };
+                localStorage.setItem('settings', JSON.stringify(settings));
+            } else {
+                // Sheet has no settings yet — seed it with current defaults.
+                storage.saveSettings(settings);
             }
-            localStorage.setItem('categories', JSON.stringify(categories));
-        } else {
-            // Cloud is empty - push current categories to cloud
-            postToCloud('saveCategories', { categories });
+
+            if (data.categories && Object.keys(data.categories).length > 0) {
+                categories = data.categories;
+                if (!categories['Income']) {
+                    categories['Income'] = JSON.parse(JSON.stringify(defaultCategories['Income']));
+                    storage.saveCategories(categories);
+                }
+                localStorage.setItem('categories', JSON.stringify(categories));
+            } else {
+                // Sheet has no categories yet — seed it with current defaults.
+                storage.saveCategories(categories);
+            }
         }
 
         lastSyncTime = new Date();
@@ -306,31 +260,23 @@ async function syncFromCloud() {
         renderCharts();
         loadSettingsForm();
         renderCategoryList();
-
     } catch (error) {
-        console.error('Sync error:', error);
+        console.error('Pull error:', error);
         updateSyncStatus('error');
     }
 
     isSyncing = false;
 }
 
-async function syncToCloud() {
-    if (!isCloudEnabled) return;
-
+async function pushAllToCloud() {
+    if (!storage.isCloud()) return;
     updateSyncStatus('syncing');
-
     try {
-        await postToCloud('syncAll', {
-            expenses: expenses,
-            settings: settings,
-            categories: categories
-        });
-
+        await storage.pushAll({ expenses, settings, categories });
         lastSyncTime = new Date();
         updateSyncStatus('synced');
     } catch (error) {
-        console.error('Sync to cloud error:', error);
+        console.error('Push error:', error);
         updateSyncStatus('error');
     }
 }
@@ -339,15 +285,16 @@ function updateSyncStatus(status) {
     if (!syncStatus) return;
 
     syncStatus.className = 'sync-status';
+    syncStatus.hidden = false;
 
     switch (status) {
         case 'syncing':
-            syncStatus.innerHTML = '🔄 Syncing...';
+            syncStatus.innerHTML = '🔄 Syncing…';
             syncStatus.classList.add('syncing');
             break;
         case 'synced':
             const time = lastSyncTime ? lastSyncTime.toLocaleTimeString() : 'now';
-            syncStatus.innerHTML = `☁️ Synced at ${time}`;
+            syncStatus.innerHTML = `☁️ Synced ${time}`;
             syncStatus.classList.add('synced');
             break;
         case 'error':
@@ -355,11 +302,12 @@ function updateSyncStatus(status) {
             syncStatus.classList.add('error');
             break;
         case 'offline':
-            syncStatus.innerHTML = '📴 Offline mode';
+            syncStatus.innerHTML = '📴 Local only';
             syncStatus.classList.add('offline');
             break;
         default:
             syncStatus.innerHTML = '';
+            syncStatus.hidden = true;
     }
 }
 
@@ -396,11 +344,178 @@ async function init() {
     renderCharts();
     renderCategoryList();
 
-    // Sync from cloud if enabled
-    if (isCloudEnabled) {
-        await syncFromCloud();
-    } else {
-        updateSyncStatus('offline');
+    // Initialize auth + storage
+    await initAuthAndStorage();
+}
+
+// ===== Auth + Storage bootstrapping =====
+const AUTH_MODE_KEY = 'authMode'; // 'guest' | 'google' | undefined
+
+function getAuthMode() {
+    try { return localStorage.getItem(AUTH_MODE_KEY); } catch (_) { return null; }
+}
+function setAuthMode(mode) {
+    try {
+        if (mode) localStorage.setItem(AUTH_MODE_KEY, mode);
+        else localStorage.removeItem(AUTH_MODE_KEY);
+    } catch (_) {}
+}
+
+function showLanding() {
+    const el = document.getElementById('landing-overlay');
+    if (el) el.hidden = false;
+    document.body.classList.add('landing-open');
+}
+function hideLanding() {
+    const el = document.getElementById('landing-overlay');
+    if (el) el.hidden = true;
+    document.body.classList.remove('landing-open');
+}
+
+async function initAuthAndStorage() {
+    const clientId = window.GOOGLE_OAUTH_CLIENT_ID;
+    const configured = await window.auth.init(clientId);
+
+    auth.onChange(renderAuthUi);
+    setupAuthUi();
+    setupLanding();
+
+    if (!configured) {
+        // Cloud not set up — silently treat as guest, no landing.
+        setAuthMode('guest');
+        renderAuthUi();
+        return;
+    }
+
+    const mode = getAuthMode();
+
+    if (mode === 'google' && auth.getProfile()) {
+        // Returning signed-in user — try silent re-auth.
+        const ok = await auth.silentSignIn();
+        if (ok) {
+            await activateCloudBackend({ initial: true });
+            renderAuthUi();
+            return;
+        }
+        // Silent failed → fall through to landing so user can re-auth.
+        setAuthMode(null);
+    }
+
+    if (mode === 'guest') {
+        renderAuthUi();
+        return;
+    }
+
+    // First visit (or cleared state) — show landing.
+    showLanding();
+    renderAuthUi();
+}
+
+async function activateCloudBackend({ initial = false } = {}) {
+    try {
+        updateSyncStatus('syncing');
+
+        const profile = auth.getProfile();
+        const newEmail = profile ? profile.email : null;
+        const lastEmail = (() => {
+            try { return localStorage.getItem('lastSignedInEmail'); } catch (_) { return null; }
+        })();
+        const switchedAccount = !!(newEmail && lastEmail && newEmail !== lastEmail);
+
+        // If a different Google account is signing in on this device, wipe
+        // the previous user's cached data so it can't leak into the new
+        // account's sheet. The new sheet's contents will be loaded by pullFromCloud below.
+        if (switchedAccount) {
+            wipeLocalData({ keepSettings: false });
+        }
+
+        await storage.useSheets();
+        setAuthMode('google');
+        if (newEmail) {
+            try { localStorage.setItem('lastSignedInEmail', newEmail); } catch (_) {}
+        }
+
+        // Migration prompt: only offer to upload local data when transitioning
+        // from guest mode (i.e., this is a brand-new sign-in AND we didn't just
+        // switch accounts AND there's actually local data to migrate).
+        if (initial === false && !switchedAccount && expenses.length > 0) {
+            const wantsMigrate = confirm(
+                `You have ${expenses.length} local expense(s). Upload them to your Google Sheet?\n\n` +
+                `Click "OK" to upload your local data, or "Cancel" to use whatever's already in your sheet (local data may be overwritten).`
+            );
+            if (wantsMigrate) {
+                await pushAllToCloud();
+            }
+        }
+        await pullFromCloud();
+    } catch (e) {
+        console.error('[cloud] activation failed', e);
+        updateSyncStatus('error');
+        storage.useLocal();
+    }
+}
+
+// Reset all per-user data in localStorage and in-memory state to defaults.
+// Does NOT touch Google Drive — only this device.
+function wipeLocalData({ keepSettings = false } = {}) {
+    expenses = [];
+    categories = JSON.parse(JSON.stringify(defaultCategories));
+    if (!keepSettings) {
+        settings = {
+            currency: 'USD',
+            monthlyBudget: 0,
+            warningThreshold: 80,
+            enableNotifications: true,
+            theme: 'dark'
+        };
+    }
+    try {
+        localStorage.setItem('expenses', JSON.stringify(expenses));
+        localStorage.setItem('categories', JSON.stringify(categories));
+        if (!keepSettings) localStorage.setItem('settings', JSON.stringify(settings));
+
+        // Drop every cached spreadsheet ID — they belong to specific accounts.
+        const toRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('expenseSheetId:')) toRemove.push(k);
+        }
+        toRemove.forEach(k => localStorage.removeItem(k));
+    } catch (_) {}
+
+    // Re-render so the UI reflects the wipe immediately.
+    if (typeof populateCategoryDropdowns === 'function') populateCategoryDropdowns();
+    if (typeof renderExpenses === 'function') renderExpenses();
+    if (typeof updateStats === 'function') updateStats();
+    if (typeof renderCharts === 'function') renderCharts();
+    if (typeof loadSettingsForm === 'function' && !keepSettings) loadSettingsForm();
+    if (typeof renderCategoryList === 'function') renderCategoryList();
+}
+
+function setupLanding() {
+    const signinBtn = document.getElementById('landing-signin-btn');
+    const guestBtn = document.getElementById('landing-guest-btn');
+
+    if (signinBtn) {
+        signinBtn.addEventListener('click', async () => {
+            if (!auth.isConfigured()) {
+                alert('Google sign-in is not configured for this deployment yet.');
+                return;
+            }
+            const ok = await auth.signIn();
+            if (ok) {
+                hideLanding();
+                await activateCloudBackend({ initial: false });
+                renderAuthUi();
+            }
+        });
+    }
+    if (guestBtn) {
+        guestBtn.addEventListener('click', () => {
+            setAuthMode('guest');
+            hideLanding();
+            renderAuthUi();
+        });
     }
 }
 
@@ -544,10 +659,7 @@ function setupEventListeners() {
         }
     });
 
-    // Sync button
-    if (syncBtn) {
-        syncBtn.addEventListener('click', syncFromCloud);
-    }
+    // Sync button (auth widget handles sign-in/out separately)
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -557,10 +669,10 @@ function setupEventListeners() {
         }
     });
 
-    // Auto-sync every 5 minutes if cloud is enabled
-    if (isCloudEnabled) {
-        setInterval(syncFromCloud, 5 * 60 * 1000);
-    }
+    // Auto-sync every 5 minutes when signed in
+    setInterval(() => {
+        if (storage.isCloud()) pullFromCloud();
+    }, 5 * 60 * 1000);
 }
 
 // ===== Currency Management =====
@@ -1471,11 +1583,7 @@ async function handleAddExpense(e) {
 
     expenses.push(expense);
     saveExpenses();
-
-    // Sync to cloud
-    if (isCloudEnabled) {
-        postToCloud('addExpense', { expense });
-    }
+    storage.addExpense(expense);
 
     renderExpenses();
     updateStats();
@@ -1769,10 +1877,7 @@ async function handleEditExpense(e) {
         };
 
         saveExpenses();
-
-        if (isCloudEnabled) {
-            postToCloud('updateExpense', { expense: expenses[index] });
-        }
+        storage.updateExpense(expenses[index]);
 
         renderExpenses();
         updateStats();
@@ -1787,10 +1892,7 @@ async function deleteExpense(id) {
     if (confirm('Are you sure you want to delete this expense?')) {
         expenses = expenses.filter(e => String(e.id) !== String(id));
         saveExpenses();
-
-        if (isCloudEnabled) {
-            postToCloud('deleteExpense', { id });
-        }
+        storage.deleteExpense(id);
 
         renderExpenses();
         updateStats();
@@ -1805,19 +1907,60 @@ async function handleDeleteAll() {
         return;
     }
 
-    if (confirm('Are you sure you want to delete ALL expenses? This cannot be undone!')) {
+    // Guest / not signed in — single, clear confirm.
+    if (!storage.isCloud()) {
+        if (!confirm(`Delete all ${expenses.length} expense(s) from this device?\n\nThis cannot be undone.`)) return;
         expenses = [];
         saveExpenses();
-
-        if (isCloudEnabled) {
-            postToCloud('deleteAllExpenses', {});
-        }
-
         renderExpenses();
         updateStats();
         renderCharts();
         checkBudgetAlert();
+        showToast('Local data cleared', 'success');
+        return;
     }
+
+    // Signed in — explain that the cloud sheet is involved and offer scope.
+    // Use a custom prompt instead of confirm() because we have 3 outcomes.
+    const choice = (window.prompt(
+        `Reset data — choose what to delete:\n\n` +
+        `  1  Everything (local + your Google Sheet)\n` +
+        `  2  This device only (sheet untouched; will re-sync next time)\n` +
+        `  cancel  Keep my data\n\n` +
+        `Type 1, 2, or cancel:`
+    ) || '').trim().toLowerCase();
+
+    if (choice === '1') {
+        if (!confirm('FINAL CONFIRM: Delete ALL expenses from this device AND your Google Sheet?\n\nThis cannot be undone.')) return;
+        expenses = [];
+        saveExpenses();
+        try {
+            updateSyncStatus('syncing');
+            await storage.deleteAllExpenses();
+            updateSyncStatus('synced');
+        } catch (e) {
+            console.error(e);
+            updateSyncStatus('error');
+            alert('Local data was cleared, but the Google Sheet could not be cleared. Please try again from the Profile page (Pull / Push).');
+        }
+        renderExpenses();
+        updateStats();
+        renderCharts();
+        checkBudgetAlert();
+        showToast('All data cleared', 'success');
+    } else if (choice === '2') {
+        if (!confirm('Clear data on this device only?\n\nYour Google Sheet stays untouched. Local data will be repopulated from the sheet on next sync.')) return;
+        expenses = [];
+        saveExpenses();
+        renderExpenses();
+        updateStats();
+        renderCharts();
+        checkBudgetAlert();
+        showToast('Local data cleared (sheet preserved)', 'success');
+        // Pull cloud data back so the user isn't left with a confusingly empty UI.
+        pullFromCloud();
+    }
+    // any other input = cancel
 }
 
 // ===== Export to CSV =====
@@ -1958,9 +2101,8 @@ function importFromCSV(file) {
             }
 
             saveExpenses();
-
-            if (isCloudEnabled) {
-                syncToCloud();
+            if (storage.isCloud()) {
+                pushAllToCloud();
             }
 
             renderExpenses();
@@ -2126,16 +2268,12 @@ function saveExpenses() {
 
 function saveCategories() {
     localStorage.setItem('categories', JSON.stringify(categories));
-    if (isCloudEnabled) {
-        postToCloud('saveCategories', { categories });
-    }
+    storage.saveCategories(categories);
 }
 
 function saveSettings() {
     localStorage.setItem('settings', JSON.stringify(settings));
-    if (isCloudEnabled) {
-        postToCloud('saveSettings', { settings });
-    }
+    storage.saveSettings(settings);
 }
 
 // Make functions globally available
@@ -2143,6 +2281,211 @@ window.openEditModal = openEditModal;
 window.deleteExpense = deleteExpense;
 window.deleteCategory = deleteCategory;
 window.deleteSubcategory = deleteSubcategory;
+
+// ===== Auth widget UI =====
+function setupAuthUi() {
+    const signinBtn = document.getElementById('signin-btn');
+    const profileBtn = document.getElementById('auth-trigger');
+    const menu = document.getElementById('auth-menu');
+    const signoutBtn = document.getElementById('signout-btn');
+    const banner = document.getElementById('signin-banner');
+    const bannerSigninBtn = document.getElementById('banner-signin-btn');
+    const bannerCloseBtn = document.getElementById('banner-close');
+    const profileSigninBtn = document.getElementById('profile-signin-btn');
+    const profileSignoutBtn = document.getElementById('profile-signout-btn');
+    const profilePullBtn = document.getElementById('profile-pull-btn');
+    const profilePushBtn = document.getElementById('profile-push-btn');
+
+    const doSignIn = async () => {
+        if (!auth.isConfigured()) {
+            alert('Google sign-in is not configured for this deployment yet.\n\nSee OAUTH_SETUP.md for instructions.');
+            return;
+        }
+        const ok = await auth.signIn();
+        if (ok) {
+            await activateCloudBackend({ initial: false });
+            renderAuthUi();
+        }
+    };
+    const doSignOut = async () => {
+        const confirmed = confirm(
+            'Sign out and clear this device?\n\n' +
+            'Your data stays safe in your Google Sheet on Drive — this only ' +
+            'removes the local cached copy so the next person using this browser ' +
+            'doesn\'t see your data.'
+        );
+        if (!confirmed) return;
+
+        await auth.signOut();
+        storage.useLocal();
+        setAuthMode(null);
+        try { localStorage.removeItem('lastSignedInEmail'); } catch (_) {}
+        wipeLocalData();
+        updateSyncStatus('offline');
+        renderAuthUi();
+        showLanding();
+    };
+
+    if (signinBtn) signinBtn.addEventListener('click', doSignIn);
+    if (bannerSigninBtn) bannerSigninBtn.addEventListener('click', doSignIn);
+    if (profileSigninBtn) profileSigninBtn.addEventListener('click', doSignIn);
+    if (signoutBtn) signoutBtn.addEventListener('click', doSignOut);
+    if (profileSignoutBtn) profileSignoutBtn.addEventListener('click', doSignOut);
+
+    if (profilePullBtn) profilePullBtn.addEventListener('click', async () => {
+        if (!storage.isCloud()) return;
+        if (confirm('Replace local data with the contents of your Google Sheet?')) {
+            await pullFromCloud();
+        }
+    });
+    if (profilePushBtn) profilePushBtn.addEventListener('click', async () => {
+        if (!storage.isCloud()) return;
+        if (confirm('Overwrite your Google Sheet with all local data?')) {
+            await pushAllToCloud();
+        }
+    });
+
+    if (profileBtn && menu) {
+        profileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.hidden = !menu.hidden;
+        });
+        document.addEventListener('click', (e) => {
+            if (!menu.hidden && !menu.contains(e.target) && e.target !== profileBtn) {
+                menu.hidden = true;
+            }
+        });
+    }
+
+    if (bannerCloseBtn && banner) {
+        bannerCloseBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            banner.hidden = true;
+            try { localStorage.setItem('signinBannerDismissed', '1'); } catch (_) {}
+        });
+    }
+}
+
+function renderAuthUi() {
+    const signinBtn = document.getElementById('signin-btn');
+    const profileEl = document.getElementById('auth-profile');
+    const banner = document.getElementById('signin-banner');
+    const profile = auth.getProfile();
+    const signedIn = auth.isSignedIn();
+
+    // Header widget
+    if (signinBtn && profileEl) {
+        if (signedIn && profile) {
+            signinBtn.hidden = true;
+            profileEl.hidden = false;
+
+            const avatar = document.getElementById('auth-avatar');
+            const fallback = document.getElementById('auth-avatar-fallback');
+            setAvatar(avatar, fallback, profile.picture);
+            const nameEl = document.getElementById('auth-name');
+            if (nameEl) nameEl.textContent = profile.name || profile.email || '';
+            const menuName = document.getElementById('auth-menu-name');
+            if (menuName) menuName.textContent = profile.name || '';
+            const menuEmail = document.getElementById('auth-menu-email');
+            if (menuEmail) menuEmail.textContent = profile.email || '';
+
+            const sheetLink = document.getElementById('open-sheet-link');
+            if (sheetLink) {
+                const url = window.sheetsApi && window.sheetsApi.getSpreadsheetUrl();
+                if (url) {
+                    sheetLink.href = url;
+                    sheetLink.style.display = '';
+                } else {
+                    sheetLink.style.display = 'none';
+                }
+            }
+        } else {
+            signinBtn.hidden = !auth.isConfigured();
+            profileEl.hidden = true;
+        }
+    }
+
+    // Banner — only show for guest users who haven't dismissed it
+    if (banner) {
+        const dismissed = (() => {
+            try { return localStorage.getItem('signinBannerDismissed') === '1'; } catch (_) { return false; }
+        })();
+        const isGuest = getAuthMode() === 'guest';
+        banner.hidden = signedIn || !auth.isConfigured() || dismissed || !isGuest;
+    }
+
+    // Sync status when signed out
+    if (!signedIn) updateSyncStatus('offline');
+
+    // Profile page
+    const profileSignedOut = document.getElementById('profile-signed-out');
+    const profileSignedIn = document.getElementById('profile-signed-in');
+    if (profileSignedOut && profileSignedIn) {
+        profileSignedOut.hidden = signedIn;
+        profileSignedIn.hidden = !signedIn;
+        if (signedIn && profile) {
+            const pAvatar = document.getElementById('profile-avatar');
+            const pFallback = document.getElementById('profile-avatar-fallback');
+            setAvatar(pAvatar, pFallback, profile.picture);
+            const pName = document.getElementById('profile-name');
+            if (pName) pName.textContent = profile.name || '';
+            const pEmail = document.getElementById('profile-email');
+            if (pEmail) pEmail.textContent = profile.email || '';
+            const pSheet = document.getElementById('profile-sheet-link');
+            if (pSheet) {
+                const url = window.sheetsApi && window.sheetsApi.getSpreadsheetUrl();
+                if (url) { pSheet.href = url; pSheet.style.display = ''; }
+                else { pSheet.style.display = 'none'; }
+            }
+        }
+
+        // Stats
+        const entriesEl = signedIn
+            ? document.getElementById('profile-stat-entries-in')
+            : document.getElementById('profile-stat-entries');
+        if (entriesEl) entriesEl.textContent = expenses.length;
+
+        const sinceEl = document.getElementById('profile-stat-since');
+        if (sinceEl) sinceEl.textContent = oldestExpenseDateLabel();
+
+        const lastSyncEl = document.getElementById('profile-stat-lastsync');
+        if (lastSyncEl) lastSyncEl.textContent = lastSyncTime ? lastSyncTime.toLocaleTimeString() : '—';
+    }
+}
+
+function oldestExpenseDateLabel() {
+    if (!expenses.length) return '—';
+    const dates = expenses.map(e => (e.date || '').substring(0, 10)).filter(Boolean).sort();
+    if (!dates.length) return '—';
+    try {
+        const d = new Date(dates[0] + 'T00:00:00');
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (_) {
+        return dates[0];
+    }
+}
+
+function setAvatar(imgEl, fallbackEl, url) {
+    if (!imgEl && !fallbackEl) return;
+    const showFallback = () => {
+        if (imgEl) { imgEl.hidden = true; imgEl.removeAttribute('src'); }
+        if (fallbackEl) fallbackEl.hidden = false;
+    };
+    if (url && imgEl) {
+        imgEl.onerror = showFallback;
+        imgEl.onload = () => {
+            imgEl.hidden = false;
+            if (fallbackEl) fallbackEl.hidden = true;
+        };
+        // Hide until loaded so we don't flash a broken image icon
+        imgEl.hidden = true;
+        if (fallbackEl) fallbackEl.hidden = false;
+        imgEl.src = url;
+    } else {
+        showFallback();
+    }
+}
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', init);
