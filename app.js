@@ -1,13 +1,6 @@
 // ===== Expense Tracker Application with Google Sheets Integration =====
-
-// ========================================
-// CONFIGURATION - Set your Google Script URL here
-// ========================================
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxZT8-21_QCOuWISroIXkK9rWkQDjiHKrJ5ATYrYN-SZpMTXpl2bff2bHju0u5KZVNw/exec';
-// ========================================
-
-// Check if Google Sheets is configured
-const isCloudEnabled = GOOGLE_SCRIPT_URL !== 'YOUR_GOOGLE_SCRIPT_URL_HERE' && GOOGLE_SCRIPT_URL.length > 0;
+// Cloud sync uses per-user OAuth (see auth.js + sheets-api.js + storage.js).
+// When signed out, data lives in localStorage only.
 
 // Default categories and subcategories
 const defaultCategories = {
@@ -150,7 +143,6 @@ const alertClose = document.getElementById('alert-close');
 const currencySelect = document.getElementById('currency-select');
 const amountCurrency = document.getElementById('amount-currency');
 const syncStatus = document.getElementById('sync-status');
-const syncBtn = document.getElementById('sync-btn');
 const themeSelect = document.getElementById('theme-select');
 
 // Filter elements
@@ -214,86 +206,51 @@ const deleteAllBtn = document.getElementById('delete-all');
 // Sort state
 let currentSort = { column: 'date', direction: 'desc' };
 
-// ===== Google Sheets API Functions =====
-async function fetchFromCloud(action) {
-    if (!isCloudEnabled) return null;
+// ===== Cloud Sync (delegates to storage adapter — see storage.js) =====
+// When signed out, the storage backend is a no-op and only localStorage is used.
+// When signed in, every mutation is mirrored to the user's own Google Sheet.
 
-    try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=${action}`);
-        const data = await response.json();
-        return data.success ? data : null;
-    } catch (error) {
-        console.error('Cloud fetch error:', error);
-        return null;
-    }
-}
-
-async function postToCloud(action, payload) {
-    if (!isCloudEnabled) return null;
-
-    try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ action, ...payload })
-        });
-
-        // With no-cors mode, we can't read the response
-        // But the request will still be processed by the server
-        return { success: true };
-    } catch (error) {
-        console.error('Cloud post error:', error);
-        return null;
-    }
-}
-
-async function syncFromCloud() {
-    if (!isCloudEnabled || isSyncing) return;
+async function pullFromCloud() {
+    if (!storage.isCloud() || isSyncing) return;
 
     isSyncing = true;
     updateSyncStatus('syncing');
 
     try {
-        // Fetch expenses
-        const expensesData = await fetchFromCloud('getExpenses');
-        if (expensesData && expensesData.expenses && expensesData.expenses.length > 0) {
-            // Normalize dates to YYYY-MM-DD using local timezone
-            // Google Sheets may return dates in different formats (ISO datetime, locale strings, etc.)
-            expenses = expensesData.expenses.map(exp => {
-                if (exp.date) {
-                    exp.date = normalizeDateString(exp.date);
-                }
+        const data = await storage.pullAll();
+        if (data) {
+            // Replace unconditionally — if the sheet is empty, the local copy
+            // should also be empty. Merging-when-empty caused another account's
+            // data to leak between sign-ins.
+            const incoming = Array.isArray(data.expenses) ? data.expenses : [];
+            expenses = incoming.map(exp => {
+                if (exp.date) exp.date = normalizeDateString(exp.date);
                 return exp;
             });
             localStorage.setItem('expenses', JSON.stringify(expenses));
-        }
+            window.__bridge && window.__bridge.notifyExpenses(expenses);
 
-        // Fetch settings
-        const settingsData = await fetchFromCloud('getSettings');
-        if (settingsData && settingsData.settings && Object.keys(settingsData.settings).length > 0) {
-            settings = { ...settings, ...settingsData.settings };
-            localStorage.setItem('settings', JSON.stringify(settings));
-        } else {
-            // Cloud is empty - push current settings to cloud
-            postToCloud('saveSettings', { settings });
-        }
-
-        // Fetch categories
-        const categoriesData = await fetchFromCloud('getCategories');
-        if (categoriesData && categoriesData.categories && Object.keys(categoriesData.categories).length > 0) {
-            categories = categoriesData.categories;
-            // Backfill Income if the cloud data is missing it, then push back so cloud stays in sync
-            if (!categories['Income']) {
-                categories['Income'] = JSON.parse(JSON.stringify(defaultCategories['Income']));
-                postToCloud('saveCategories', { categories });
+            if (data.settings && Object.keys(data.settings).length > 0) {
+                settings = { ...settings, ...data.settings };
+                localStorage.setItem('settings', JSON.stringify(settings));
+            } else {
+                // Sheet has no settings yet — seed it with current defaults.
+                storage.saveSettings(settings);
             }
-            localStorage.setItem('categories', JSON.stringify(categories));
-        } else {
-            // Cloud is empty - push current categories to cloud
-            postToCloud('saveCategories', { categories });
+            window.__bridge && window.__bridge.notifySettings(settings);
+
+            if (data.categories && Object.keys(data.categories).length > 0) {
+                categories = data.categories;
+                if (!categories['Income']) {
+                    categories['Income'] = JSON.parse(JSON.stringify(defaultCategories['Income']));
+                    storage.saveCategories(categories);
+                }
+                localStorage.setItem('categories', JSON.stringify(categories));
+            } else {
+                // Sheet has no categories yet — seed it with current defaults.
+                storage.saveCategories(categories);
+            }
+            window.__bridge && window.__bridge.notifyCategories(categories);
         }
 
         lastSyncTime = new Date();
@@ -306,31 +263,23 @@ async function syncFromCloud() {
         renderCharts();
         loadSettingsForm();
         renderCategoryList();
-
     } catch (error) {
-        console.error('Sync error:', error);
+        console.error('Pull error:', error);
         updateSyncStatus('error');
     }
 
     isSyncing = false;
 }
 
-async function syncToCloud() {
-    if (!isCloudEnabled) return;
-
+async function pushAllToCloud() {
+    if (!storage.isCloud()) return;
     updateSyncStatus('syncing');
-
     try {
-        await postToCloud('syncAll', {
-            expenses: expenses,
-            settings: settings,
-            categories: categories
-        });
-
+        await storage.pushAll({ expenses, settings, categories });
         lastSyncTime = new Date();
         updateSyncStatus('synced');
     } catch (error) {
-        console.error('Sync to cloud error:', error);
+        console.error('Push error:', error);
         updateSyncStatus('error');
     }
 }
@@ -339,15 +288,16 @@ function updateSyncStatus(status) {
     if (!syncStatus) return;
 
     syncStatus.className = 'sync-status';
+    syncStatus.hidden = false;
 
     switch (status) {
         case 'syncing':
-            syncStatus.innerHTML = '🔄 Syncing...';
+            syncStatus.innerHTML = '🔄 Syncing…';
             syncStatus.classList.add('syncing');
             break;
         case 'synced':
             const time = lastSyncTime ? lastSyncTime.toLocaleTimeString() : 'now';
-            syncStatus.innerHTML = `☁️ Synced at ${time}`;
+            syncStatus.innerHTML = `☁️ Synced ${time}`;
             syncStatus.classList.add('synced');
             break;
         case 'error':
@@ -355,11 +305,12 @@ function updateSyncStatus(status) {
             syncStatus.classList.add('error');
             break;
         case 'offline':
-            syncStatus.innerHTML = '📴 Offline mode';
+            syncStatus.innerHTML = '📴 Local only';
             syncStatus.classList.add('offline');
             break;
         default:
             syncStatus.innerHTML = '';
+            syncStatus.hidden = true;
     }
 }
 
@@ -396,11 +347,196 @@ async function init() {
     renderCharts();
     renderCategoryList();
 
-    // Sync from cloud if enabled
-    if (isCloudEnabled) {
-        await syncFromCloud();
-    } else {
-        updateSyncStatus('offline');
+    // Initialize auth + storage
+    await initAuthAndStorage();
+}
+
+// ===== Auth + Storage bootstrapping =====
+const AUTH_MODE_KEY = 'authMode'; // 'guest' | 'google' | undefined
+
+function getAuthMode() {
+    try { return localStorage.getItem(AUTH_MODE_KEY); } catch (_) { return null; }
+}
+function setAuthMode(mode) {
+    try {
+        if (mode) localStorage.setItem(AUTH_MODE_KEY, mode);
+        else localStorage.removeItem(AUTH_MODE_KEY);
+    } catch (_) {}
+}
+
+function showLanding() {
+    const el = document.getElementById('landing-overlay');
+    if (el) el.hidden = false;
+    document.body.classList.add('landing-open');
+}
+function hideLanding() {
+    const el = document.getElementById('landing-overlay');
+    if (el) el.hidden = true;
+    document.body.classList.remove('landing-open');
+}
+
+async function initAuthAndStorage() {
+    const clientId = window.GOOGLE_OAUTH_CLIENT_ID;
+    const configured = await window.auth.init(clientId);
+
+    auth.onChange(renderAuthUi);
+    setupAuthUi();
+    setupLanding();
+
+    if (!configured) {
+        // Cloud not set up — silently treat as guest, no landing.
+        setAuthMode('guest');
+        renderAuthUi();
+        return;
+    }
+
+    const mode = getAuthMode();
+
+    if (mode === 'google' && auth.getProfile()) {
+        // Returning signed-in user — try silent re-auth.
+        const ok = await auth.silentSignIn();
+        if (ok) {
+            await activateCloudBackend({ initial: true });
+            renderAuthUi();
+            return;
+        }
+        // Silent failed → fall through to landing so user can re-auth.
+        setAuthMode(null);
+    }
+
+    if (mode === 'guest') {
+        renderAuthUi();
+        return;
+    }
+
+    // First visit (or cleared state) — show landing.
+    showLanding();
+    renderAuthUi();
+}
+
+async function activateCloudBackend({ initial = false } = {}) {
+    try {
+        updateSyncStatus('syncing');
+
+        const profile = auth.getProfile();
+        const newEmail = profile ? profile.email : null;
+        const lastEmail = (() => {
+            try { return localStorage.getItem('lastSignedInEmail'); } catch (_) { return null; }
+        })();
+        const switchedAccount = !!(newEmail && lastEmail && newEmail !== lastEmail);
+
+        // If a different Google account is signing in on this device, wipe
+        // the previous user's cached data so it can't leak into the new
+        // account's sheet. The new sheet's contents will be loaded by pullFromCloud below.
+        if (switchedAccount) {
+            wipeLocalData({ keepSettings: false });
+        }
+
+        await storage.useSheets();
+        setAuthMode('google');
+        if (newEmail) {
+            try { localStorage.setItem('lastSignedInEmail', newEmail); } catch (_) {}
+        }
+
+        // Migration prompt: only offer to upload local data on the FIRST
+        // sign-in for this Google account on this device. After the first
+        // pull/push, local data is just a mirror of the sheet, so re-prompting
+        // every sign-in is noise.
+        const migrationKey = newEmail ? `cloudMigrated:${newEmail}` : null;
+        const alreadyMigrated = migrationKey
+            ? (() => { try { return localStorage.getItem(migrationKey) === '1'; } catch { return false; } })()
+            : false;
+
+        if (initial === false && !switchedAccount && !alreadyMigrated && expenses.length > 0) {
+            const wantsMigrate = confirm(
+                `You have ${expenses.length} local expense(s). Upload them to your Google Sheet?\n\n` +
+                `Click "OK" to upload your local data, or "Cancel" to use whatever's already in your sheet (local data may be overwritten).`
+            );
+            if (wantsMigrate) {
+                await pushAllToCloud();
+            }
+        }
+        await pullFromCloud();
+
+        // Mark this account as initialized so we never re-prompt for migration.
+        if (migrationKey) {
+            try { localStorage.setItem(migrationKey, '1'); } catch (_) {}
+        }
+    } catch (e) {
+        console.error('[cloud] activation failed', e);
+        updateSyncStatus('error');
+        storage.useLocal();
+    }
+}
+
+// Reset all per-user data in localStorage and in-memory state to defaults.
+// Does NOT touch Google Drive — only this device.
+function wipeLocalData({ keepSettings = false } = {}) {
+    expenses = [];
+    categories = JSON.parse(JSON.stringify(defaultCategories));
+    if (!keepSettings) {
+        settings = {
+            currency: 'USD',
+            monthlyBudget: 0,
+            warningThreshold: 80,
+            enableNotifications: true,
+            theme: 'dark'
+        };
+    }
+    try {
+        localStorage.setItem('expenses', JSON.stringify(expenses));
+        localStorage.setItem('categories', JSON.stringify(categories));
+        if (!keepSettings) localStorage.setItem('settings', JSON.stringify(settings));
+
+        // Drop every cached spreadsheet ID — they belong to specific accounts.
+        const toRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('expenseSheetId:')) toRemove.push(k);
+        }
+        toRemove.forEach(k => localStorage.removeItem(k));
+    } catch (_) {}
+
+    // Notify modular store of the wipe.
+    if (window.__bridge) {
+        window.__bridge.notifyExpenses(expenses);
+        window.__bridge.notifyCategories(categories);
+        if (!keepSettings) window.__bridge.notifySettings(settings);
+    }
+
+    // Re-render so the UI reflects the wipe immediately.
+    if (typeof populateCategoryDropdowns === 'function') populateCategoryDropdowns();
+    if (typeof renderExpenses === 'function') renderExpenses();
+    if (typeof updateStats === 'function') updateStats();
+    if (typeof renderCharts === 'function') renderCharts();
+    if (typeof loadSettingsForm === 'function' && !keepSettings) loadSettingsForm();
+    if (typeof renderCategoryList === 'function') renderCategoryList();
+}
+
+function setupLanding() {
+    const signinBtn = document.getElementById('landing-signin-btn');
+    const guestBtn = document.getElementById('landing-guest-btn');
+
+    if (signinBtn) {
+        signinBtn.addEventListener('click', async () => {
+            if (!auth.isConfigured()) {
+                alert('Google sign-in is not configured for this deployment yet.');
+                return;
+            }
+            const ok = await auth.signIn();
+            if (ok) {
+                hideLanding();
+                await activateCloudBackend({ initial: false });
+                renderAuthUi();
+            }
+        });
+    }
+    if (guestBtn) {
+        guestBtn.addEventListener('click', () => {
+            setAuthMode('guest');
+            hideLanding();
+            renderAuthUi();
+        });
     }
 }
 
@@ -409,10 +545,35 @@ function setupEventListeners() {
     // Form submission
     expenseForm.addEventListener('submit', handleAddExpense);
 
-    // Category change - update subcategories
-    expenseCategory.addEventListener('change', () => {
-        updateSubcategories(expenseCategory.value, expenseSubcategory);
+    // Smart Add-modal picker setup (type filter buttons)
+    document.querySelectorAll('.type-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.type-filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentAddTypeFilter = btn.dataset.type;
+            buildAddCategoryPicker();
+        });
     });
+
+    // Category view toggle (grid = icon only, list = icon + name)
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            try { localStorage.setItem('categoryPickerView', view); } catch (_) {}
+            const grid = document.getElementById('expense-category-grid');
+            if (grid) grid.dataset.view = view;
+            document.querySelectorAll('.view-toggle-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.view === view);
+            });
+        });
+    });
+
+    const addCancelBtn = document.getElementById('add-cancel');
+    if (addCancelBtn) {
+        addCancelBtn.addEventListener('click', () => {
+            document.getElementById('add-modal').classList.remove('active');
+        });
+    }
 
     editCategory.addEventListener('change', () => {
         updateSubcategories(editCategory.value, editSubcategory);
@@ -466,9 +627,16 @@ function setupEventListeners() {
     saveBudgetBtn.addEventListener('click', saveBudgetSettings);
 
     // Category Management
-    addCategoryBtn.addEventListener('click', addNewCategory);
-    subcategoryCategory.addEventListener('change', renderSubcategoryList);
-    addSubcategoryBtn.addEventListener('click', addNewSubcategory);
+    if (addCategoryBtn) addCategoryBtn.addEventListener('click', addNewCategory);
+    if (subcategoryCategory) subcategoryCategory.addEventListener('change', renderSubcategoryList);
+    if (addSubcategoryBtn) addSubcategoryBtn.addEventListener('click', addNewSubcategory);
+
+    // Enter key in the "Add Category" name input
+    if (newCategoryName) {
+        newCategoryName.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); addNewCategory(); }
+        });
+    }
 
     // New-category emoji picker toggle
     newCategoryIconBtn.addEventListener('click', (e) => {
@@ -532,10 +700,7 @@ function setupEventListeners() {
         }
     });
 
-    // Sync button
-    if (syncBtn) {
-        syncBtn.addEventListener('click', syncFromCloud);
-    }
+    // Sync button (auth widget handles sign-in/out separately)
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -545,10 +710,10 @@ function setupEventListeners() {
         }
     });
 
-    // Auto-sync every 5 minutes if cloud is enabled
-    if (isCloudEnabled) {
-        setInterval(syncFromCloud, 5 * 60 * 1000);
-    }
+    // Auto-sync every 5 minutes when signed in
+    setInterval(() => {
+        if (storage.isCloud()) pullFromCloud();
+    }, 5 * 60 * 1000);
 }
 
 // ===== Currency Management =====
@@ -599,7 +764,7 @@ function handleThemeChange() {
 
     if (headerAddBtn) {
         headerAddBtn.addEventListener('click', () => {
-            if (addModal) addModal.classList.add('active');
+            openAddModal();
         });
     }
 
@@ -607,8 +772,7 @@ function handleThemeChange() {
 function handleNavigation(page) {
     // Handle special popup pages first
     if (page === 'add') {
-        const addModal = document.getElementById('add-modal');
-        if (addModal) addModal.classList.add('active');
+        openAddModal();
         return;
     }
 
@@ -631,7 +795,7 @@ function handleNavigation(page) {
 
 function updateCurrencyDisplay() {
     const currency = currencies[settings.currency];
-    amountCurrency.textContent = `(${currency.symbol})`;
+    if (amountCurrency) amountCurrency.textContent = currency.symbol;
     document.querySelectorAll('.edit-currency').forEach(el => {
         el.textContent = `(${currency.symbol})`;
     });
@@ -658,10 +822,13 @@ function isIncomeCategory(name) {
 }
 
 function populateCategoryDropdowns() {
-    const dropdowns = [expenseCategory, editCategory, filterCategory, subcategoryCategory];
+    // expenseCategory is now a hidden input driven by the visual picker — rebuild it instead
+    buildAddCategoryPicker();
+
+    const dropdowns = [editCategory, filterCategory, subcategoryCategory].filter(Boolean);
 
     dropdowns.forEach((dropdown, index) => {
-        const isFilter = index === 2;
+        const isFilter = index === 1;
         dropdown.innerHTML = isFilter
             ? '<option value="">All Categories</option>'
             : '<option value="">Select Category</option>';
@@ -723,25 +890,136 @@ function updateSubcategories(category, selectElement) {
 }
 
 function renderCategoryList() {
-    categoryList.innerHTML = '';
+    if (!categoryList) return;
     const defaultCategoryNames = Object.keys(defaultCategories);
 
-    Object.entries(categories).forEach(([name, data]) => {
-        const isDefault = defaultCategoryNames.includes(name);
-        const safeName = name.replace(/'/g, "\\'");
-        const item = document.createElement('div');
-        item.className = `category-item ${isDefault ? 'default' : ''}`;
-        item.innerHTML = `
-            <span>${data.icon} ${name}</span>
-            <div class="item-actions">
-                <button class="btn-edit-category" title="Edit icon" ${isDefault ? 'disabled' : ''} onclick="openEditCategoryModal('${safeName}')">✏️</button>
-                <button class="btn-delete-category" ${isDefault ? 'disabled title="Cannot delete default category"' : ''} onclick="deleteCategory('${safeName}')">🗑️</button>
-            </div>
-        `;
-        categoryList.appendChild(item);
+    const incomeEntries  = Object.entries(categories).filter(([n]) => isIncomeCategory(n));
+    const expenseEntries = Object.entries(categories).filter(([n]) => !isIncomeCategory(n));
+
+    categoryList.innerHTML = '';
+    if (incomeEntries.length) {
+        categoryList.appendChild(buildCatGroup('Income',  '💰', incomeEntries,  defaultCategoryNames));
+    }
+    if (expenseEntries.length) {
+        categoryList.appendChild(buildCatGroup('Expense', '💸', expenseEntries, defaultCategoryNames));
+    }
+    bindCategoryListDelegation();
+}
+
+function buildCatGroup(label, icon, entries, defaultNames) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cat-group';
+    wrap.innerHTML = `
+        <div class="cat-group-header">
+            <span class="cat-group-icon">${icon}</span>
+            <span class="cat-group-label">${escapeHtmlSafe(label)}</span>
+            <span class="cat-group-count">${entries.length}</span>
+        </div>
+        <div class="cat-card-grid"></div>
+    `;
+    const grid = wrap.querySelector('.cat-card-grid');
+    entries.forEach(([name, data]) => grid.appendChild(buildCatCard(name, data, defaultNames)));
+    return wrap;
+}
+
+function buildCatCard(name, data, defaultNames) {
+    const isDefault = defaultNames.includes(name);
+    const defaultSubs = (defaultCategories[name]?.subcategories) || [];
+    const card = document.createElement('div');
+    card.className = 'cat-card' + (isDefault ? ' is-default' : '');
+    card.dataset.category = name;
+
+    const subChips = data.subcategories.map(sub => {
+        const isDefSub = defaultSubs.includes(sub);
+        const removable = !isDefSub;
+        return `
+            <span class="cat-sub-chip${isDefSub ? ' is-default' : ''}">
+                <span class="cat-sub-chip-label">${escapeHtmlSafe(sub)}</span>
+                ${removable
+                    ? `<button type="button" class="cat-sub-chip-x" data-action="del-sub" data-sub="${escapeAttrSafe(sub)}" title="Remove">×</button>`
+                    : ''}
+            </span>`;
+    }).join('') || `<span class="cat-sub-empty">No subcategories yet</span>`;
+
+    const delTitle = isDefault ? 'Default categories can\u2019t be deleted' : 'Delete category';
+    card.innerHTML = `
+        <div class="cat-card-head">
+            <span class="cat-card-icon">${data.icon || '📁'}</span>
+            <span class="cat-card-name">${escapeHtmlSafe(name)}</span>
+            ${isDefault ? '<span class="cat-card-badge">Default</span>' : ''}
+            <span class="cat-card-actions">
+                <button type="button" class="cat-card-btn" data-action="edit-cat" title="Change icon">✏️</button>
+                <button type="button" class="cat-card-btn danger" data-action="del-cat" title="${delTitle}" ${isDefault ? 'disabled' : ''}>🗑️</button>
+            </span>
+        </div>
+        <div class="cat-card-subs">${subChips}</div>
+        <form class="cat-card-add" data-action="add-sub" novalidate>
+            <input type="text" placeholder="+ Add subcategory" maxlength="30" autocomplete="off">
+            <button type="submit" class="cat-card-add-btn" title="Add">＋</button>
+        </form>
+    `;
+    return card;
+}
+
+function bindCategoryListDelegation() {
+    if (!categoryList || categoryList.__fxBound) return;
+    categoryList.__fxBound = true;
+
+    categoryList.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const card = btn.closest('[data-category]');
+        if (!card) return;
+        const cat = card.dataset.category;
+        const action = btn.dataset.action;
+        if (action === 'edit-cat') openEditCategoryModal(cat);
+        else if (action === 'del-cat') deleteCategory(cat);
+        else if (action === 'del-sub') deleteSubcategory(cat, btn.dataset.sub);
     });
 
-    renderSubcategoryList();
+    categoryList.addEventListener('submit', (e) => {
+        const form = e.target.closest('form[data-action="add-sub"]');
+        if (!form) return;
+        e.preventDefault();
+        const card = form.closest('[data-category]');
+        if (!card) return;
+        const input = form.querySelector('input');
+        const val = (input?.value || '').trim();
+        if (!val) return;
+        addSubcategoryInline(card.dataset.category, val);
+        if (input) input.value = '';
+        // Refocus the same input on the freshly rendered card so user can keep typing.
+        requestAnimationFrame(() => {
+            const newCard = categoryList.querySelector(`.cat-card[data-category="${cssAttrEscape(card.dataset.category)}"] .cat-card-add input`);
+            newCard?.focus();
+        });
+    });
+}
+
+function addSubcategoryInline(category, name) {
+    if (!categories[category]) return;
+    name = String(name).trim();
+    if (!name) return;
+    if (categories[category].subcategories.includes(name)) {
+        showToast('Subcategory already exists', 'warning');
+        return;
+    }
+    categories[category].subcategories.push(name);
+    saveCategories();
+    populateCategoryDropdowns();
+    renderCategoryList();
+    showToast(`Added "${name}"`, 'success');
+}
+
+function cssAttrEscape(s) {
+    return String(s).replace(/(["\\])/g, '\\$1');
+}
+function escapeHtmlSafe(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeAttrSafe(s) {
+    return escapeHtmlSafe(s).replace(/"/g, '&quot;');
 }
 
 function openEditCategoryModal(name) {
@@ -770,6 +1048,8 @@ function saveEditCategory() {
 }
 
 function renderSubcategoryList() {
+    // Legacy: standalone subcategory list is gone — chips render inline per card.
+    if (!subcategoryList || !subcategoryCategory) return;
     subcategoryList.innerHTML = '';
     const selectedCategory = subcategoryCategory.value;
 
@@ -835,6 +1115,7 @@ async function deleteCategory(name) {
 }
 
 async function addNewSubcategory() {
+    if (!subcategoryCategory || !newSubcategoryName) return;
     const category = subcategoryCategory.value;
     const name = newSubcategoryName.value.trim();
 
@@ -1296,12 +1577,161 @@ function generateColors(count) {
     return colors;
 }
 
+// ===== Smart Add-Modal Picker =====
+let currentAddTypeFilter = 'expense'; // 'expense' | 'income' | 'all'
+
+function openAddModal() {
+    const addModal = document.getElementById('add-modal');
+    if (!addModal) return;
+
+    // Reset form fields
+    if (expenseForm) expenseForm.reset();
+    expenseCategory.value = '';
+    expenseSubcategory.value = '';
+
+    // Default date = today (local)
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    expenseDate.value = `${yyyy}-${mm}-${dd}`;
+
+    // Reset selected labels
+    const catSel = document.getElementById('picker-category-selected');
+    const subSel = document.getElementById('picker-subcategory-selected');
+    if (catSel) catSel.textContent = 'Pick one';
+    if (subSel) subSel.textContent = 'Pick one';
+
+    // Hide subcategory section until a category is chosen
+    const subSection = document.getElementById('subcategory-section');
+    if (subSection) subSection.style.display = 'none';
+    const subChips = document.getElementById('expense-subcategory-chips');
+    if (subChips) subChips.innerHTML = '';
+
+    // Reset type filter to expense by default
+    currentAddTypeFilter = 'expense';
+    document.querySelectorAll('.type-filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.type === currentAddTypeFilter);
+    });
+
+    buildAddCategoryPicker();
+    addModal.classList.add('active');
+
+    // Focus amount for fast entry
+    setTimeout(() => { if (expenseAmount) expenseAmount.focus(); }, 50);
+}
+
+function buildAddCategoryPicker() {
+    const grid = document.getElementById('expense-category-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    // Apply persisted view mode (grid = icon only, list = icon + name)
+    const savedView = (() => {
+        try { return localStorage.getItem('categoryPickerView') || 'grid'; } catch (_) { return 'grid'; }
+    })();
+    grid.dataset.view = savedView;
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === savedView);
+    });
+
+    const entries = Object.entries(categories).filter(([name]) => {
+        if (currentAddTypeFilter === 'income') return isIncomeCategory(name);
+        if (currentAddTypeFilter === 'expense') return !isIncomeCategory(name);
+        return true;
+    });
+
+    if (entries.length === 0) {
+        grid.innerHTML = '<div class="picker-empty">No categories. Add some in Settings → Categories.</div>';
+        return;
+    }
+
+    entries.forEach(([name, data]) => {
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'category-tile';
+        if (isIncomeCategory(name)) tile.classList.add('is-income');
+        if (expenseCategory.value === name) tile.classList.add('selected');
+        tile.dataset.category = name;
+        tile.innerHTML = `
+            <span class="tile-icon">${data.icon}</span>
+            <span class="tile-name">${name}</span>
+        `;
+        tile.addEventListener('click', () => selectAddCategory(name));
+        grid.appendChild(tile);
+    });
+}
+
+function selectAddCategory(name) {
+    expenseCategory.value = name;
+
+    // Update tile selection visuals
+    document.querySelectorAll('#expense-category-grid .category-tile').forEach(t => {
+        t.classList.toggle('selected', t.dataset.category === name);
+    });
+
+    const data = categories[name];
+    const catSel = document.getElementById('picker-category-selected');
+    if (catSel && data) catSel.textContent = `${data.icon} ${name}`;
+
+    // Reset subcategory and rebuild chips
+    expenseSubcategory.value = '';
+    const subSel = document.getElementById('picker-subcategory-selected');
+    if (subSel) subSel.textContent = 'Pick one';
+    buildAddSubcategoryChips(name);
+}
+
+function buildAddSubcategoryChips(category) {
+    const wrap = document.getElementById('expense-subcategory-chips');
+    const section = document.getElementById('subcategory-section');
+    if (!wrap || !section) return;
+    wrap.innerHTML = '';
+
+    if (!category || !categories[category]) {
+        section.style.display = 'none';
+        return;
+    }
+
+    const subs = categories[category].subcategories || [];
+    if (subs.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = '';
+    subs.forEach(sub => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip';
+        chip.textContent = sub;
+        chip.dataset.sub = sub;
+        chip.addEventListener('click', () => {
+            expenseSubcategory.value = sub;
+            wrap.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+            chip.classList.add('selected');
+            const subSel = document.getElementById('picker-subcategory-selected');
+            if (subSel) subSel.textContent = sub;
+        });
+        wrap.appendChild(chip);
+    });
+}
+
 // ===== Add Transaction =====
 async function handleAddExpense(e) {
     e.preventDefault();
 
-    // Derive transaction type from the selected category
+    // Validate picker selections (hidden inputs aren't enforced by the browser)
     const selectedCategory = expenseCategory.value;
+    if (!selectedCategory) {
+        showToast('Please pick a category', 'warning');
+        return;
+    }
+    if (!expenseSubcategory.value) {
+        showToast('Please pick a subcategory', 'warning');
+        return;
+    }
+
+    // Derive transaction type from the selected category
     const transactionType = isIncomeCategory(selectedCategory) ? 'income' : 'expense';
 
     const expense = {
@@ -1317,11 +1747,7 @@ async function handleAddExpense(e) {
 
     expenses.push(expense);
     saveExpenses();
-
-    // Sync to cloud
-    if (isCloudEnabled) {
-        postToCloud('addExpense', { expense });
-    }
+    storage.addExpense(expense);
 
     renderExpenses();
     updateStats();
@@ -1382,6 +1808,39 @@ function renderExpenses() {
         return isIncome ? sum + parseFloat(exp.amount) : sum - parseFloat(exp.amount);
     }, 0);
     filteredTotal.textContent = formatCurrency(total);
+
+    renderRecentExpenses();
+}
+
+// Renders the dashboard "Recent Activity" table + mobile cards.
+function renderRecentExpenses() {
+    const tbody = document.getElementById('recent-expense-tbody');
+    const cards = document.getElementById('recent-expense-cards');
+    const empty = document.getElementById('recent-empty-state');
+    const table = document.getElementById('recent-expense-table');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (cards) cards.innerHTML = '';
+
+    const recent = [...expenses]
+        .sort((a, b) => {
+            const d = (b.date || '').localeCompare(a.date || '');
+            if (d !== 0) return d;
+            return (b.timestamp || '').localeCompare(a.timestamp || '');
+        })
+        .slice(0, 10);
+
+    const isEmpty = recent.length === 0;
+    if (empty) empty.classList.toggle('visible', isEmpty);
+    if (table) table.classList.toggle('table-empty', isEmpty);
+    if (cards) cards.classList.toggle('table-empty', isEmpty);
+    if (isEmpty) return;
+
+    for (const exp of recent) {
+        tbody.appendChild(createExpenseRow(exp));
+        if (cards) cards.appendChild(createExpenseCard(exp));
+    }
 }
 
 function createExpenseRow(expense) {
@@ -1570,10 +2029,7 @@ async function handleEditExpense(e) {
         };
 
         saveExpenses();
-
-        if (isCloudEnabled) {
-            postToCloud('updateExpense', { expense: expenses[index] });
-        }
+        storage.updateExpense(expenses[index]);
 
         renderExpenses();
         updateStats();
@@ -1588,10 +2044,7 @@ async function deleteExpense(id) {
     if (confirm('Are you sure you want to delete this expense?')) {
         expenses = expenses.filter(e => String(e.id) !== String(id));
         saveExpenses();
-
-        if (isCloudEnabled) {
-            postToCloud('deleteExpense', { id });
-        }
+        storage.deleteExpense(id);
 
         renderExpenses();
         updateStats();
@@ -1606,19 +2059,60 @@ async function handleDeleteAll() {
         return;
     }
 
-    if (confirm('Are you sure you want to delete ALL expenses? This cannot be undone!')) {
+    // Guest / not signed in — single, clear confirm.
+    if (!storage.isCloud()) {
+        if (!confirm(`Delete all ${expenses.length} expense(s) from this device?\n\nThis cannot be undone.`)) return;
         expenses = [];
         saveExpenses();
-
-        if (isCloudEnabled) {
-            postToCloud('deleteAllExpenses', {});
-        }
-
         renderExpenses();
         updateStats();
         renderCharts();
         checkBudgetAlert();
+        showToast('Local data cleared', 'success');
+        return;
     }
+
+    // Signed in — explain that the cloud sheet is involved and offer scope.
+    // Use a custom prompt instead of confirm() because we have 3 outcomes.
+    const choice = (window.prompt(
+        `Reset data — choose what to delete:\n\n` +
+        `  1  Everything (local + your Google Sheet)\n` +
+        `  2  This device only (sheet untouched; will re-sync next time)\n` +
+        `  cancel  Keep my data\n\n` +
+        `Type 1, 2, or cancel:`
+    ) || '').trim().toLowerCase();
+
+    if (choice === '1') {
+        if (!confirm('FINAL CONFIRM: Delete ALL expenses from this device AND your Google Sheet?\n\nThis cannot be undone.')) return;
+        expenses = [];
+        saveExpenses();
+        try {
+            updateSyncStatus('syncing');
+            await storage.deleteAllExpenses();
+            updateSyncStatus('synced');
+        } catch (e) {
+            console.error(e);
+            updateSyncStatus('error');
+            alert('Local data was cleared, but the Google Sheet could not be cleared. Please try again from the Profile page (Pull / Push).');
+        }
+        renderExpenses();
+        updateStats();
+        renderCharts();
+        checkBudgetAlert();
+        showToast('All data cleared', 'success');
+    } else if (choice === '2') {
+        if (!confirm('Clear data on this device only?\n\nYour Google Sheet stays untouched. Local data will be repopulated from the sheet on next sync.')) return;
+        expenses = [];
+        saveExpenses();
+        renderExpenses();
+        updateStats();
+        renderCharts();
+        checkBudgetAlert();
+        showToast('Local data cleared (sheet preserved)', 'success');
+        // Pull cloud data back so the user isn't left with a confusingly empty UI.
+        pullFromCloud();
+    }
+    // any other input = cancel
 }
 
 // ===== Export to CSV =====
@@ -1759,9 +2253,8 @@ function importFromCSV(file) {
             }
 
             saveExpenses();
-
-            if (isCloudEnabled) {
-                syncToCloud();
+            if (storage.isCloud()) {
+                pushAllToCloud();
             }
 
             renderExpenses();
@@ -1810,54 +2303,56 @@ function parseCSVLine(line) {
 
 // ===== Statistics =====
 function updateStats() {
-    // Use local date instead of UTC to correctly match today's expenses
-    const today = getLocalDateString(new Date());
-    const currentMonth = today.substring(0, 7);
+    const todayEl  = document.getElementById('today-total');
+    const monthEl  = document.getElementById('month-total');
+    const totalEntriesEl = document.getElementById('total-entries');
+    const budgetStatusEl = document.getElementById('budget-status');
+    const budgetBarEl    = document.getElementById('budget-bar');
+    if (!todayEl) return;
 
-    // Calculate Today's Spending (only expenses)
-    const todayExpenses = expenses.filter(e => e.date.substring(0, 10) === today && (e.type === 'expense' || (e.type !== 'income' && e.category !== 'Income')));
-    const todaySum = todayExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
-    todayTotal.textContent = formatCurrency(todaySum);
+    const todayStr = getLocalDateString(new Date());
+    const monthStr = todayStr.substring(0, 7); // YYYY-MM
 
-    // Calculate This Month's Income & Expense
-    const monthTransactions = expenses.filter(e => e.date.substring(0, 7) === currentMonth);
-    
-    let monthIncome = 0;
+    let todaySpend = 0;
     let monthExpense = 0;
-    
-    monthTransactions.forEach(e => {
-        const isIncome = e.type === 'income' || e.category === 'Income';
-        if (isIncome) {
-            monthIncome += parseFloat(e.amount);
+    let monthIncome = 0;
+
+    for (const e of expenses) {
+        const amt = parseFloat(e.amount) || 0;
+        const inc = e.type === 'income' || (e.type !== 'expense' && e.category === 'Income');
+        const dateStr = (e.date || '').substring(0, 10);
+        if (dateStr === todayStr && !inc) todaySpend += amt;
+        if (dateStr.startsWith(monthStr)) {
+            if (inc) monthIncome += amt;
+            else monthExpense += amt;
+        }
+    }
+
+    todayEl.textContent  = formatCurrency(todaySpend);
+    monthEl.textContent  = formatCurrency(monthExpense);
+    if (totalEntriesEl) totalEntriesEl.textContent = String(expenses.length);
+
+    if (budgetStatusEl) {
+        if (monthIncome > 0) {
+            const remaining = monthIncome - monthExpense;
+            budgetStatusEl.textContent = formatCurrency(remaining);
         } else {
-            monthExpense += parseFloat(e.amount);
+            budgetStatusEl.textContent = 'Not Set';
         }
-    });
+    }
 
-    monthTotal.textContent = formatCurrency(monthExpense);
-
-    totalEntries.textContent = expenses.length;
-
-    // Budget -> Income Tracker Refactor
-    const remaining = monthIncome - monthExpense;
-    
-    budgetStatus.textContent = formatCurrency(remaining);
-    
-    // Only show warning based on Income percentage if monthIncome > 0
-    if (monthIncome > 0) {
-        const percentage = (monthExpense / monthIncome) * 100;
-        budgetBar.style.width = Math.min(percentage, 100) + '%';
-        budgetBar.classList.remove('warning', 'danger');
-
-        if (percentage >= 100) {
-            budgetBar.classList.add('danger');
-        } else if (percentage >= settings.warningThreshold) {
-            budgetBar.classList.add('warning');
+    if (budgetBarEl) {
+        budgetBarEl.classList.remove('warning', 'danger');
+        const threshold = settings.warningThreshold || 80;
+        if (monthIncome > 0) {
+            const pct = (monthExpense / monthIncome) * 100;
+            budgetBarEl.style.width = Math.min(pct, 100) + '%';
+            if (pct >= 100) budgetBarEl.classList.add('danger');
+            else if (pct >= threshold) budgetBarEl.classList.add('warning');
+        } else {
+            budgetBarEl.style.width = '0%';
+            if (monthExpense > 0) budgetBarEl.classList.add('danger');
         }
-    } else {
-        budgetBar.style.width = '0%';
-        budgetBar.classList.remove('warning', 'danger');
-        if (monthExpense > 0) budgetBar.classList.add('danger');
     }
 }
 
@@ -1923,20 +2418,20 @@ function normalizeDateString(dateStr) {
 
 function saveExpenses() {
     localStorage.setItem('expenses', JSON.stringify(expenses));
+    // Notify the new modular store (js/main.js). Safe no-op if not loaded yet.
+    window.__bridge && window.__bridge.notifyExpenses(expenses);
 }
 
 function saveCategories() {
     localStorage.setItem('categories', JSON.stringify(categories));
-    if (isCloudEnabled) {
-        postToCloud('saveCategories', { categories });
-    }
+    storage.saveCategories(categories);
+    window.__bridge && window.__bridge.notifyCategories(categories);
 }
 
 function saveSettings() {
     localStorage.setItem('settings', JSON.stringify(settings));
-    if (isCloudEnabled) {
-        postToCloud('saveSettings', { settings });
-    }
+    storage.saveSettings(settings);
+    window.__bridge && window.__bridge.notifySettings(settings);
 }
 
 // Make functions globally available
@@ -1944,6 +2439,211 @@ window.openEditModal = openEditModal;
 window.deleteExpense = deleteExpense;
 window.deleteCategory = deleteCategory;
 window.deleteSubcategory = deleteSubcategory;
+
+// ===== Auth widget UI =====
+function setupAuthUi() {
+    const signinBtn = document.getElementById('signin-btn');
+    const profileBtn = document.getElementById('auth-trigger');
+    const menu = document.getElementById('auth-menu');
+    const signoutBtn = document.getElementById('signout-btn');
+    const banner = document.getElementById('signin-banner');
+    const bannerSigninBtn = document.getElementById('banner-signin-btn');
+    const bannerCloseBtn = document.getElementById('banner-close');
+    const profileSigninBtn = document.getElementById('profile-signin-btn');
+    const profileSignoutBtn = document.getElementById('profile-signout-btn');
+    const profilePullBtn = document.getElementById('profile-pull-btn');
+    const profilePushBtn = document.getElementById('profile-push-btn');
+
+    const doSignIn = async () => {
+        if (!auth.isConfigured()) {
+            alert('Google sign-in is not configured for this deployment yet.\n\nSee OAUTH_SETUP.md for instructions.');
+            return;
+        }
+        const ok = await auth.signIn();
+        if (ok) {
+            await activateCloudBackend({ initial: false });
+            renderAuthUi();
+        }
+    };
+    const doSignOut = async () => {
+        const confirmed = confirm(
+            'Sign out and clear this device?\n\n' +
+            'Your data stays safe in your Google Sheet on Drive — this only ' +
+            'removes the local cached copy so the next person using this browser ' +
+            'doesn\'t see your data.'
+        );
+        if (!confirmed) return;
+
+        await auth.signOut();
+        storage.useLocal();
+        setAuthMode(null);
+        try { localStorage.removeItem('lastSignedInEmail'); } catch (_) {}
+        wipeLocalData();
+        updateSyncStatus('offline');
+        renderAuthUi();
+        showLanding();
+    };
+
+    if (signinBtn) signinBtn.addEventListener('click', doSignIn);
+    if (bannerSigninBtn) bannerSigninBtn.addEventListener('click', doSignIn);
+    if (profileSigninBtn) profileSigninBtn.addEventListener('click', doSignIn);
+    if (signoutBtn) signoutBtn.addEventListener('click', doSignOut);
+    if (profileSignoutBtn) profileSignoutBtn.addEventListener('click', doSignOut);
+
+    if (profilePullBtn) profilePullBtn.addEventListener('click', async () => {
+        if (!storage.isCloud()) return;
+        if (confirm('Replace local data with the contents of your Google Sheet?')) {
+            await pullFromCloud();
+        }
+    });
+    if (profilePushBtn) profilePushBtn.addEventListener('click', async () => {
+        if (!storage.isCloud()) return;
+        if (confirm('Overwrite your Google Sheet with all local data?')) {
+            await pushAllToCloud();
+        }
+    });
+
+    if (profileBtn && menu) {
+        profileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.hidden = !menu.hidden;
+        });
+        document.addEventListener('click', (e) => {
+            if (!menu.hidden && !menu.contains(e.target) && e.target !== profileBtn) {
+                menu.hidden = true;
+            }
+        });
+    }
+
+    if (bannerCloseBtn && banner) {
+        bannerCloseBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            banner.hidden = true;
+            try { localStorage.setItem('signinBannerDismissed', '1'); } catch (_) {}
+        });
+    }
+}
+
+function renderAuthUi() {
+    const signinBtn = document.getElementById('signin-btn');
+    const profileEl = document.getElementById('auth-profile');
+    const banner = document.getElementById('signin-banner');
+    const profile = auth.getProfile();
+    const signedIn = auth.isSignedIn();
+
+    // Header widget
+    if (signinBtn && profileEl) {
+        if (signedIn && profile) {
+            signinBtn.hidden = true;
+            profileEl.hidden = false;
+
+            const avatar = document.getElementById('auth-avatar');
+            const fallback = document.getElementById('auth-avatar-fallback');
+            setAvatar(avatar, fallback, profile.picture);
+            const nameEl = document.getElementById('auth-name');
+            if (nameEl) nameEl.textContent = profile.name || profile.email || '';
+            const menuName = document.getElementById('auth-menu-name');
+            if (menuName) menuName.textContent = profile.name || '';
+            const menuEmail = document.getElementById('auth-menu-email');
+            if (menuEmail) menuEmail.textContent = profile.email || '';
+
+            const sheetLink = document.getElementById('open-sheet-link');
+            if (sheetLink) {
+                const url = window.sheetsApi && window.sheetsApi.getSpreadsheetUrl();
+                if (url) {
+                    sheetLink.href = url;
+                    sheetLink.style.display = '';
+                } else {
+                    sheetLink.style.display = 'none';
+                }
+            }
+        } else {
+            signinBtn.hidden = !auth.isConfigured();
+            profileEl.hidden = true;
+        }
+    }
+
+    // Banner — only show for guest users who haven't dismissed it
+    if (banner) {
+        const dismissed = (() => {
+            try { return localStorage.getItem('signinBannerDismissed') === '1'; } catch (_) { return false; }
+        })();
+        const isGuest = getAuthMode() === 'guest';
+        banner.hidden = signedIn || !auth.isConfigured() || dismissed || !isGuest;
+    }
+
+    // Sync status when signed out
+    if (!signedIn) updateSyncStatus('offline');
+
+    // Profile page
+    const profileSignedOut = document.getElementById('profile-signed-out');
+    const profileSignedIn = document.getElementById('profile-signed-in');
+    if (profileSignedOut && profileSignedIn) {
+        profileSignedOut.hidden = signedIn;
+        profileSignedIn.hidden = !signedIn;
+        if (signedIn && profile) {
+            const pAvatar = document.getElementById('profile-avatar');
+            const pFallback = document.getElementById('profile-avatar-fallback');
+            setAvatar(pAvatar, pFallback, profile.picture);
+            const pName = document.getElementById('profile-name');
+            if (pName) pName.textContent = profile.name || '';
+            const pEmail = document.getElementById('profile-email');
+            if (pEmail) pEmail.textContent = profile.email || '';
+            const pSheet = document.getElementById('profile-sheet-link');
+            if (pSheet) {
+                const url = window.sheetsApi && window.sheetsApi.getSpreadsheetUrl();
+                if (url) { pSheet.href = url; pSheet.style.display = ''; }
+                else { pSheet.style.display = 'none'; }
+            }
+        }
+
+        // Stats
+        const entriesEl = signedIn
+            ? document.getElementById('profile-stat-entries-in')
+            : document.getElementById('profile-stat-entries');
+        if (entriesEl) entriesEl.textContent = expenses.length;
+
+        const sinceEl = document.getElementById('profile-stat-since');
+        if (sinceEl) sinceEl.textContent = oldestExpenseDateLabel();
+
+        const lastSyncEl = document.getElementById('profile-stat-lastsync');
+        if (lastSyncEl) lastSyncEl.textContent = lastSyncTime ? lastSyncTime.toLocaleTimeString() : '—';
+    }
+}
+
+function oldestExpenseDateLabel() {
+    if (!expenses.length) return '—';
+    const dates = expenses.map(e => (e.date || '').substring(0, 10)).filter(Boolean).sort();
+    if (!dates.length) return '—';
+    try {
+        const d = new Date(dates[0] + 'T00:00:00');
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (_) {
+        return dates[0];
+    }
+}
+
+function setAvatar(imgEl, fallbackEl, url) {
+    if (!imgEl && !fallbackEl) return;
+    const showFallback = () => {
+        if (imgEl) { imgEl.hidden = true; imgEl.removeAttribute('src'); }
+        if (fallbackEl) fallbackEl.hidden = false;
+    };
+    if (url && imgEl) {
+        imgEl.onerror = showFallback;
+        imgEl.onload = () => {
+            imgEl.hidden = false;
+            if (fallbackEl) fallbackEl.hidden = true;
+        };
+        // Hide until loaded so we don't flash a broken image icon
+        imgEl.hidden = true;
+        if (fallbackEl) fallbackEl.hidden = false;
+        imgEl.src = url;
+    } else {
+        showFallback();
+    }
+}
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', init);

@@ -7,12 +7,58 @@
     <title>Daily Expense Tracker</title>
     <meta name="description" content="Track your daily expenses with categories, subcategories, and notes">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="effects.css">
+    <link rel="stylesheet" href="categories.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1/dist/polyfill.umd.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Google OAuth Client ID. See OAUTH_SETUP.md to create your own. -->
+    <script>window.GOOGLE_OAUTH_CLIENT_ID = '427777482911-3gllfaap8hk2et77mstvk2n44cn5h4uj.apps.googleusercontent.com';</script>
 </head>
 
 <body>
+    <!-- First-run landing / sign-in overlay -->
+    <div class="landing-overlay" id="landing-overlay" hidden>
+        <div class="landing-card">
+            <div class="landing-logo">💰</div>
+            <h1 class="landing-title">Daily Expense Tracker</h1>
+            <p class="landing-tagline">Track your spending. Stay in control.</p>
+
+            <div class="landing-actions">
+                <button class="btn-signin landing-btn-primary" id="landing-signin-btn">
+                    <span class="g-icon">G</span>
+                    <span>Sign in with Google</span>
+                </button>
+                <button class="landing-btn-secondary" id="landing-guest-btn">
+                    👤 Continue as guest
+                </button>
+            </div>
+
+            <div class="landing-features">
+                <div class="landing-feature">
+                    <span class="landing-feature-icon">☁️</span>
+                    <div>
+                        <strong>Signed in</strong>
+                        <span>Your data syncs to a private Google Sheet on your own Drive — accessible from any device.</span>
+                    </div>
+                </div>
+                <div class="landing-feature">
+                    <span class="landing-feature-icon">🔒</span>
+                    <div>
+                        <strong>Guest mode</strong>
+                        <span>Data stays only on this device. Nothing leaves your browser. You can sign in later to back up.</span>
+                    </div>
+                </div>
+            </div>
+
+            <p class="landing-fineprint">
+                We only request access to a single Google Sheet that this app creates for you.
+                You can revoke access any time from your Google account.
+            </p>
+        </div>
+    </div>
+
     <div class="app-container">
         <!-- Header -->
         <header class="header">
@@ -22,11 +68,28 @@
                     <h1>Daily Expense Tracker</h1>
                 </div>
                 <div class="header-controls">
-                    <div class="sync-indicator">
-                        <span class="sync-status" id="sync-status">📴 Offline mode</span>
-                        <button class="btn-sync" id="sync-btn" title="Sync with cloud">🔄</button>
+                    <div class="auth-widget" id="auth-widget">
+                        <button class="btn-signin" id="signin-btn" hidden>
+                            <span class="g-icon">G</span>
+                            <span>Sign in with Google</span>
+                        </button>
+                        <div class="auth-profile" id="auth-profile" hidden>
+                            <button class="auth-trigger" id="auth-trigger" title="Account">
+                                <img class="auth-avatar" id="auth-avatar" alt="" referrerpolicy="no-referrer" hidden>
+                                <span class="auth-avatar-fallback" id="auth-avatar-fallback">👤</span>
+                                <span class="auth-name" id="auth-name"></span>
+                                <span class="auth-caret">▾</span>
+                            </button>
+                            <div class="auth-menu" id="auth-menu" hidden>
+                                <div class="auth-menu-header">
+                                    <div class="auth-menu-name" id="auth-menu-name"></div>
+                                    <div class="auth-menu-email" id="auth-menu-email"></div>
+                                </div>
+                                <a class="auth-menu-item" id="open-sheet-link" target="_blank" rel="noopener">📊 Open my sheet</a>
+                                <button class="auth-menu-item" id="signout-btn">🚪 Sign out</button>
+                            </div>
+                        </div>
                     </div>
-                    <button class="btn-add" id="header-add-btn" style="padding: 8px 16px; font-size: 0.9rem; margin-left: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">➕ Log Entry</button>
                 </div>
             </div>
             <div class="header-stats">
@@ -46,7 +109,22 @@
                     </div>
                 </div>
             </div>
+            <div class="header-actions">
+                <button class="btn-header-add" id="header-add-btn">
+                    <span class="btn-header-add-icon">＋</span>
+                    <span class="btn-header-add-label">Log Entry</span>
+                </button>
+                <span class="sync-status" id="sync-status" hidden></span>
+            </div>
         </header>
+
+        <!-- Sign-in banner (shown for guest users as a gentle nudge) -->
+        <div class="signin-banner" id="signin-banner" hidden>
+            <span class="banner-icon">☁️</span>
+            <span class="banner-text">Sign in with Google to sync your expenses to your own private Google Sheet.</span>
+            <button class="banner-action" id="banner-signin-btn">Sign in with Google</button>
+            <button class="banner-close" id="banner-close" title="Dismiss">×</button>
+        </div>
 
         <!-- Budget Alert Banner -->
         <div class="budget-alert" id="budget-alert">
@@ -100,6 +178,40 @@
                         </div>
                     </section>
                 </div>
+
+                <!-- NEW: Recent Transactions on Dashboard -->
+                <section class="table-section" style="margin-top: 30px;">
+                    <div class="table-header">
+                        <h2 class="section-title">
+                            <span class="title-icon">⏱️</span>
+                            Recent Activity
+                        </h2>
+                    </div>
+                    <div class="table-container">
+                        <table class="expense-table" id="recent-expense-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Category</th>
+                                    <th>Subcategory</th>
+                                    <th>Amount</th>
+                                    <th>Description / Note</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-expense-tbody">
+                                <!-- Recent expenses will be inserted here -->
+                            </tbody>
+                        </table>
+                        <div class="expense-cards" id="recent-expense-cards">
+                            <!-- Cards will be rendered by JS -->
+                        </div>
+                        <div class="empty-state" id="recent-empty-state">
+                            <div class="empty-icon">📝</div>
+                            <h3>No recent activity</h3>
+                        </div>
+                    </div>
+                </section>
             </div>
 
 
@@ -239,7 +351,6 @@
             <div class="settings-tabs">
                 <button class="settings-tab active" data-tab="general">🎨 General</button>
                 <button class="settings-tab" data-tab="budget">🔔 Alerts</button>
-                <button class="settings-tab" data-tab="categories">📁 Categories</button>
                 <button class="settings-tab" data-tab="data">💾 Data</button>
             </div>
 
@@ -320,63 +431,156 @@
                     <button class="btn-save" id="save-budget">💾 Save Income Settings</button>
                 </div>
             </div>
+                </section>
+            </div>
 
-            <!-- Categories Tab -->
-            <div class="settings-content hidden" id="categories-tab">
-                <h4>Manage Categories</h4>
-                <div class="category-manager">
-                    <div class="add-category-form">
-                        <div class="form-group">
-                            <label for="new-category-name">Category Name</label>
-                            <input type="text" id="new-category-name" placeholder="Enter category name..."
-                                maxlength="30">
-                        </div>
-                        <div class="form-group">
-                            <label>Icon</label>
-                            <div class="emoji-picker-wrapper">
-                                <button type="button" class="emoji-selected-display" id="new-category-icon-btn" title="Click to choose icon">📁</button>
-                                <span class="emoji-hint">← Click to pick an icon</span>
-                            </div>
-                            <div class="emoji-picker-grid" id="new-emoji-picker" style="display:none;"></div>
-                        </div>
-                        <button class="btn-add-category" id="add-category">➕ Add Category</button>
-                    </div>
-                    <div class="category-list" id="category-list">
-                        <!-- Categories will be populated here -->
-                    </div>
-                </div>
+            <!-- Categories Tab content moved to standalone nav-page -->
 
-                <h4 style="margin-top: 30px;">Manage Subcategories</h4>
-                <div class="subcategory-manager">
-                    <div class="form-group">
-                        <label for="subcategory-category">Select Category</label>
-                        <select id="subcategory-category">
-                            <!-- Categories populated by JS -->
-                        </select>
+            <!-- Categories Page (standalone) -->
+            <div class="nav-page" data-page="categories">
+                <section class="cat-page">
+                    <header class="cat-page-header">
+                        <h2 class="section-title">
+                            <span class="title-icon">📁</span>
+                            Categories
+                        </h2>
+                        <p class="cat-page-sub">Group your transactions. Default categories can be customized but not deleted.</p>
+                    </header>
+
+                    <div class="cat-add-bar">
+                        <button type="button" class="cat-add-icon-btn emoji-selected-display" id="new-category-icon-btn" title="Pick icon">📁</button>
+                        <input type="text" id="new-category-name" placeholder="Add a new category…" maxlength="30" autocomplete="off">
+                        <button class="cat-add-submit" id="add-category">
+                            <span class="cat-add-submit-icon">＋</span>
+                            <span class="cat-add-submit-label">Add</span>
+                        </button>
                     </div>
-                    <div class="add-subcategory-form">
-                        <div class="form-group">
-                            <label for="new-subcategory-name">Subcategory Name</label>
-                            <input type="text" id="new-subcategory-name" placeholder="Enter subcategory name..."
-                                maxlength="30">
-                        </div>
-                        <button class="btn-add-category" id="add-subcategory">➕ Add Subcategory</button>
-                    </div>
-                    <div class="subcategory-list" id="subcategory-list">
-                        <!-- Subcategories will be populated here -->
+                    <div class="emoji-picker-grid cat-emoji-picker" id="new-emoji-picker" style="display:none;"></div>
+
+                    <div class="cat-groups" id="category-list">
+                        <!-- JS renders grouped category cards here -->
                     </div>
                 </section>
             </div>
 
-            <!-- Profile Page (Dummy for now) -->
+            <!-- Profile Page -->
             <div class="nav-page" data-page="profile">
                 <section class="analytics-group">
-                    <div class="analytics-group-header">
-                        <h2 class="section-title">
-                            <span class="title-icon">👤</span>
-                            Profile
-                        </h2>
+                    <div class="analytics-group-body">
+                        <!-- Guest mode view -->
+                        <div id="profile-signed-out" class="profile-section" hidden>
+                            <div class="profile-card profile-guest-card">
+                                <span class="profile-avatar-fallback">👤</span>
+                                <div class="profile-info">
+                                    <div class="profile-name">Guest</div>
+                                    <div class="profile-email">Local-only mode · this browser</div>
+                                </div>
+                                <span class="profile-mode-pill profile-mode-guest">Guest</span>
+                            </div>
+
+                            <div class="profile-stats">
+                                <div class="profile-stat">
+                                    <span class="profile-stat-label">Total entries</span>
+                                    <span class="profile-stat-value" id="profile-stat-entries">0</span>
+                                </div>
+                                <div class="profile-stat">
+                                    <span class="profile-stat-label">Tracked since</span>
+                                    <span class="profile-stat-value" id="profile-stat-since">—</span>
+                                </div>
+                                <div class="profile-stat">
+                                    <span class="profile-stat-label">Storage</span>
+                                    <span class="profile-stat-value">This device</span>
+                                </div>
+                            </div>
+
+                            <div class="profile-suggestion">
+                                <div class="suggestion-icon">💡</div>
+                                <div class="suggestion-body">
+                                    <strong>Sign in to back up your data</strong>
+                                    <span>Your expenses currently live in this browser only — clearing site data will lose them. Sign in with Google to sync to a private Google Sheet on your own Drive and access it from any device.</span>
+                                </div>
+                            </div>
+
+                            <div class="profile-actions">
+                                <button class="btn-setting-item" id="profile-signin-btn">
+                                    <span class="setting-icon">🔐</span>
+                                    <div class="setting-info">
+                                        <span class="setting-title">Sign in with Google</span>
+                                        <span class="setting-desc">Sync data to your own Google Sheet</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Signed-in view -->
+                        <div id="profile-signed-in" class="profile-section" hidden>
+                            <div class="profile-card">
+                                <img class="profile-avatar" id="profile-avatar" alt="" referrerpolicy="no-referrer" hidden>
+                                <span class="profile-avatar-fallback" id="profile-avatar-fallback">👤</span>
+                                <div class="profile-info">
+                                    <div class="profile-name" id="profile-name"></div>
+                                    <div class="profile-email" id="profile-email"></div>
+                                </div>
+                                <span class="profile-mode-pill profile-mode-cloud">☁️ Synced</span>
+                            </div>
+
+                            <div class="profile-stats">
+                                <div class="profile-stat">
+                                    <span class="profile-stat-label">Total entries</span>
+                                    <span class="profile-stat-value" id="profile-stat-entries-in">0</span>
+                                </div>
+                                <div class="profile-stat">
+                                    <span class="profile-stat-label">Last sync</span>
+                                    <span class="profile-stat-value" id="profile-stat-lastsync">—</span>
+                                </div>
+                                <div class="profile-stat">
+                                    <span class="profile-stat-label">Storage</span>
+                                    <span class="profile-stat-value">Google Sheets</span>
+                                </div>
+                            </div>
+
+                            <div class="profile-suggestion" id="profile-suggestion-in">
+                                <div class="suggestion-icon">✨</div>
+                                <div class="suggestion-body">
+                                    <strong>You're all set!</strong>
+                                    <span>Every change is mirrored to your private Google Sheet. Open it any time to view, share, or back up your data.</span>
+                                </div>
+                            </div>
+
+                            <div class="profile-actions">
+                                <a class="btn-setting-item" id="profile-sheet-link" target="_blank" rel="noopener">
+                                    <span class="setting-icon">📊</span>
+                                    <div class="setting-info">
+                                        <span class="setting-title">Open my Google Sheet</span>
+                                        <span class="setting-desc">View / edit your data directly in Google Sheets</span>
+                                    </div>
+                                </a>
+                                <button class="btn-setting-item" id="profile-pull-btn">
+                                    <span class="setting-icon">⬇️</span>
+                                    <div class="setting-info">
+                                        <span class="setting-title">Pull from sheet</span>
+                                        <span class="setting-desc">Replace local data with what's in the sheet</span>
+                                    </div>
+                                </button>
+                                <button class="btn-setting-item" id="profile-push-btn">
+                                    <span class="setting-icon">⬆️</span>
+                                    <div class="setting-info">
+                                        <span class="setting-title">Push local to sheet</span>
+                                        <span class="setting-desc">Overwrite the sheet with your local data</span>
+                                    </div>
+                                </button>
+                                <button class="btn-setting-item danger" id="profile-signout-btn">
+                                    <span class="setting-icon">🚪</span>
+                                    <div class="setting-info">
+                                        <span class="setting-title">Sign out</span>
+                                        <span class="setting-desc">Local copy stays on this device</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
                     </div>
+                </section>
+            </div>
         <!-- Footer -->
         <footer class="footer">
             <p>Daily Expense Tracker &copy; 2026 | Your Personal Finance Companion</p>
@@ -384,52 +588,86 @@
     </div>
 
     <!-- Add Page (Input Form) -->
-            <div class="modal" id="add-modal">
-                <div class="modal-content modal-large">
-                    <div class="modal-header">
-                <h3>➕ Add New Transaction</h3>
+    <div class="modal" id="add-modal">
+        <div class="modal-content modal-large add-modal-content">
+            <div class="modal-header">
+                <h3>＋ New Transaction</h3>
                 <button class="modal-close" id="add-close">&times;</button>
             </div>
-                    <form id="expense-form" class="expense-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="expense-date">Date</label>
-                                <input type="date" id="expense-date" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="expense-category">Category</label>
-                                <select id="expense-category" required>
-                                    <!-- Categories populated by JS -->
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="expense-subcategory">Subcategory</label>
-                                <select id="expense-subcategory" required>
-                                    <option value="">Select Subcategory</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="expense-amount">Amount <span id="amount-currency">($)</span></label>
-                                <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00"
-                                    required>
-                            </div>
-                            <div class="form-group form-group-wide">
-                                <label for="expense-description">Description / Note</label>
-                                <input type="text" id="expense-description" placeholder="Enter description or note..."
-                                    maxlength="200">
-                            </div>
-                            <div class="form-group form-group-button">
-                                <button type="submit" class="btn-add" id="btn-add-transaction">
-                                    <span class="btn-icon">+</span>
-                                    Add Transaction
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+            <form id="expense-form" class="expense-form smart-form">
+                <!-- Hidden inputs hold the picker values -->
+                <input type="hidden" id="expense-category" required>
+                <input type="hidden" id="expense-subcategory" required>
+
+                <!-- Type filter for the category grid -->
+                <div class="type-filter" role="tablist" aria-label="Filter categories">
+                    <button type="button" class="type-filter-btn active" data-type="expense" role="tab">💸 Expense</button>
+                    <button type="button" class="type-filter-btn" data-type="income" role="tab">💰 Income</button>
+                    <button type="button" class="type-filter-btn" data-type="all" role="tab">All</button>
                 </div>
-            </div>
+
+                <!-- Visual category picker -->
+                <div class="picker-section">
+                    <div class="picker-label">
+                        <span>Category</span>
+                        <div class="picker-label-right">
+                            <span class="picker-selected" id="picker-category-selected">Pick one</span>
+                            <div class="view-toggle" role="group" aria-label="Category view">
+                                <button type="button" class="view-toggle-btn" data-view="grid" title="Icon grid" aria-label="Icon grid">⠿</button>
+                                <button type="button" class="view-toggle-btn" data-view="list" title="Icon + name list" aria-label="Icon + name list">☰</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="category-picker-grid" id="expense-category-grid" data-view="grid">
+                        <!-- Tiles populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Subcategory chips -->
+                <div class="picker-section" id="subcategory-section" style="display:none;">
+                    <div class="picker-label">
+                        <span>Subcategory</span>
+                        <span class="picker-selected" id="picker-subcategory-selected">Pick one</span>
+                    </div>
+                    <div class="subcategory-chips" id="expense-subcategory-chips">
+                        <!-- Chips populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Date + Amount row -->
+                <div class="form-row compact-row">
+                    <div class="form-group">
+                        <label for="expense-date">📅 Date</label>
+                        <input type="date" id="expense-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-amount">💵 Amount</label>
+                        <div class="amount-inline">
+                            <span class="amount-inline-symbol" id="amount-currency">$</span>
+                            <input type="number" id="expense-amount" step="0.01" min="0" placeholder="0.00" required
+                                inputmode="decimal" autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div class="form-row compact-row">
+                    <div class="form-group form-group-wide">
+                        <label for="expense-description">📝 Description / Note</label>
+                        <input type="text" id="expense-description" placeholder="Optional note..." maxlength="200"
+                            autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="add-cancel">Cancel</button>
+                    <button type="submit" class="btn-save btn-add-primary" id="btn-add-transaction">
+                        <span class="btn-icon">＋</span> Add Transaction
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
             
     <!-- Edit Modal -->
@@ -470,14 +708,6 @@
                     <button type="submit" class="btn-save">Save Changes</button>
                 </div>
             </form>
-        </div>
-    </div>
-
-                    <div class="analytics-group-body">
-                        <p style="color: var(--text-secondary); text-align: center; padding: 40px;">Profile page coming soon!</p>
-                    </div>
-                </section>
-            </div>
         </div>
     </div>
 
@@ -525,6 +755,10 @@
             <span class="nav-icon">📊</span>
             <span class="nav-label">Insight and Stats</span>
         </button>
+        <button class="nav-item" data-page="categories">
+            <span class="nav-icon">📁</span>
+            <span class="nav-label">Categories</span>
+        </button>
         <button class="nav-item" data-page="settings">
             <span class="nav-icon">⚙️</span>
             <span class="nav-label">Settings</span>
@@ -535,7 +769,11 @@
         </button>
     </nav>
 
+    <script src="auth.js"></script>
+    <script src="sheets-api.js"></script>
+    <script src="storage.js"></script>
     <script src="app.js"></script>
+    <script src="effects.js" defer></script>
 </body>
 
 </html>

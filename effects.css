@@ -1,0 +1,216 @@
+/* ============================================================
+   Premium Effects Layer — subtle animations
+   Loaded after styles.css so these rules win where needed.
+   Respects prefers-reduced-motion.
+   ============================================================ */
+
+/* ---- Global easing tokens ---- */
+:root {
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ---- Page transitions (nav between pages) ---- */
+.nav-page {
+    transition: opacity 0.28s var(--ease-soft);
+}
+.nav-page.active {
+    animation: fxPageIn 0.42s var(--ease-soft) both;
+}
+@keyframes fxPageIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Stat cards: gentle lift + subtle "tick" pulse on value change ---- */
+.stat-card {
+    transition: transform 0.35s var(--ease-spring),
+                box-shadow 0.35s var(--ease-soft),
+                border-color 0.35s var(--ease-soft);
+    will-change: transform;
+}
+.stat-card:hover {
+    transform: translateY(-3px) scale(1.012);
+}
+.stat-value.fx-tick {
+    animation: fxTick 0.55s var(--ease-spring);
+}
+@keyframes fxTick {
+    0%   { transform: scale(1); }
+    35%  { transform: scale(1.14); filter: brightness(1.18); }
+    100% { transform: scale(1); filter: brightness(1); }
+}
+
+/* ---- Buttons: micro press + ripple ---- */
+button, .btn-setting-item, .nav-item, .auth-trigger, .type-filter-btn, .view-toggle-btn, .settings-tab {
+    position: relative;
+    overflow: hidden;
+}
+.btn-save, .btn-add-primary, .btn-header-add, .btn-signin,
+.landing-btn-primary, .landing-btn-secondary,
+.btn-add-category, .btn-cancel, .btn-clear-filter,
+.btn-setting-item, .nav-item, .settings-tab, .type-filter-btn {
+    transition: transform 0.18s var(--ease-snappy),
+                box-shadow 0.25s var(--ease-soft),
+                background-color 0.25s var(--ease-soft),
+                border-color 0.25s var(--ease-soft),
+                filter 0.25s var(--ease-soft);
+}
+.btn-save:active, .btn-add-primary:active, .btn-header-add:active,
+.btn-signin:active, .landing-btn-primary:active, .landing-btn-secondary:active,
+.btn-add-category:active, .btn-cancel:active, .btn-clear-filter:active,
+.btn-setting-item:active, .settings-tab:active, .type-filter-btn:active {
+    transform: scale(0.965);
+}
+
+/* Ripple element appended by effects.js */
+.fx-ripple {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    background: rgba(255, 255, 255, 0.45);
+    transform: translate(-50%, -50%) scale(0);
+    animation: fxRipple 0.6s var(--ease-soft) forwards;
+    mix-blend-mode: screen;
+    z-index: 0;
+}
+@keyframes fxRipple {
+    to {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0;
+    }
+}
+
+/* Ensure ripple sits behind labels */
+button > *:not(.fx-ripple),
+.nav-item > *:not(.fx-ripple),
+.btn-setting-item > *:not(.fx-ripple) {
+    position: relative;
+    z-index: 1;
+}
+
+/* ---- Bottom nav: tab pop on activate ---- */
+.nav-item .nav-icon {
+    display: inline-block;
+    transition: transform 0.35s var(--ease-spring);
+}
+.nav-item.active .nav-icon {
+    animation: fxNavPop 0.5s var(--ease-spring);
+}
+@keyframes fxNavPop {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.32) rotate(-4deg); }
+    100% { transform: scale(1) rotate(0); }
+}
+
+/* ---- Modal entrance: gentle scale + fade ---- */
+.modal.show .modal-content,
+.modal[style*="display: flex"] .modal-content,
+.modal[style*="display:flex"] .modal-content {
+    animation: fxModalIn 0.36s var(--ease-spring);
+}
+@keyframes fxModalIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.94); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Toast: spring entrance ---- */
+.toast-notification {
+    transition: transform 0.4s var(--ease-spring), opacity 0.3s var(--ease-soft) !important;
+}
+
+/* ---- Expense rows / cards: stagger fade-in ---- */
+.expense-table tbody tr.fx-in,
+.expense-cards .fx-in {
+    animation: fxRowIn 0.4s var(--ease-soft) both;
+}
+@keyframes fxRowIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+/* Row deletion */
+.fx-row-out {
+    animation: fxRowOut 0.32s var(--ease-soft) forwards !important;
+    pointer-events: none;
+}
+@keyframes fxRowOut {
+    to { opacity: 0; transform: translateX(40px) scale(0.96); }
+}
+
+/* ---- Category tiles: hover lift + selected glow ---- */
+.category-tile, .subcategory-chip {
+    transition: transform 0.22s var(--ease-snappy),
+                box-shadow 0.25s var(--ease-soft),
+                background-color 0.25s var(--ease-soft),
+                border-color 0.25s var(--ease-soft) !important;
+}
+.category-tile:hover, .subcategory-chip:hover {
+    transform: translateY(-2px);
+}
+.category-tile:active, .subcategory-chip:active {
+    transform: scale(0.94);
+}
+.category-tile.fx-pick, .subcategory-chip.fx-pick {
+    animation: fxPick 0.45s var(--ease-spring);
+}
+@keyframes fxPick {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.12); }
+    100% { transform: scale(1); }
+}
+
+/* ---- Success confetti burst (from #btn-add-transaction) ---- */
+.fx-confetti-host {
+    position: fixed;
+    pointer-events: none;
+    z-index: 10000;
+    inset: 0;
+    overflow: hidden;
+}
+.fx-confetti {
+    position: absolute;
+    width: 8px;
+    height: 12px;
+    border-radius: 2px;
+    opacity: 0;
+    animation: fxConfetti 1100ms var(--ease-soft) forwards;
+}
+@keyframes fxConfetti {
+    0%   { opacity: 1; transform: translate(0,0) rotate(0deg); }
+    100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); }
+}
+
+/* ---- Sync status: subtle pulse ---- */
+.sync-status[hidden="false"], .sync-status:not([hidden]) {
+    animation: fxSyncPulse 1.8s var(--ease-soft) infinite;
+}
+@keyframes fxSyncPulse {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 1; }
+}
+
+/* ---- Logo shimmer on hover ---- */
+.logo-icon {
+    transition: transform 0.5s var(--ease-spring);
+    display: inline-block;
+}
+.logo:hover .logo-icon {
+    transform: rotate(-12deg) scale(1.12);
+}
+
+/* ---- Inputs: focus ring polish ---- */
+input:focus, select:focus, textarea:focus {
+    transition: box-shadow 0.22s var(--ease-soft), border-color 0.22s var(--ease-soft);
+}
+
+/* ---- Reduced motion: disable everything that moves ---- */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+    .fx-confetti-host { display: none !important; }
+}
