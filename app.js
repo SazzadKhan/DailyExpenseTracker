@@ -448,10 +448,14 @@ async function activateCloudBackend({ initial = false } = {}) {
             : false;
 
         if (initial === false && !switchedAccount && !alreadyMigrated && expenses.length > 0) {
-            const wantsMigrate = confirm(
-                `You have ${expenses.length} local expense(s). Upload them to your Google Sheet?\n\n` +
-                `Click "OK" to upload your local data, or "Cancel" to use whatever's already in your sheet (local data may be overwritten).`
-            );
+            const wantsMigrate = await dialog.confirm({
+                title: 'Upload local data?',
+                message:
+                    `You have ${expenses.length} local entries. Upload them to your Google Sheet?\n\n` +
+                    `Choose "Upload" to push your local data, or "Use sheet" to keep whatever's already in the sheet (local data may be overwritten).`,
+                confirmText: 'Upload',
+                cancelText: 'Use sheet'
+            });
             if (wantsMigrate) {
                 await pushAllToCloud();
             }
@@ -520,7 +524,7 @@ function setupLanding() {
     if (signinBtn) {
         signinBtn.addEventListener('click', async () => {
             if (!auth.isConfigured()) {
-                alert('Google sign-in is not configured for this deployment yet.');
+                showToast('Google sign-in is not configured for this deployment yet.', 'error');
                 return;
             }
             const ok = await auth.signIn();
@@ -765,6 +769,30 @@ function handleThemeChange() {
     if (headerAddBtn) {
         headerAddBtn.addEventListener('click', () => {
             openAddModal();
+        });
+    }
+
+    // Delegated edit/delete for the module-rendered "Recent Activity"
+    // (js/features/expenses/expenses.ui.js emits [data-action] buttons).
+    const recentRoots = [
+        document.getElementById('recent-expense-tbody'),
+        document.getElementById('recent-expense-cards')
+    ].filter(Boolean);
+    for (const root of recentRoots) {
+        root.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action][data-id]');
+            if (btn) {
+                const id = btn.dataset.id;
+                if (btn.dataset.action === 'edit') openEditModal(id);
+                else if (btn.dataset.action === 'delete') deleteExpense(id);
+                return;
+            }
+            // Tap-to-expand on mobile cards (matches legacy behavior)
+            const card = e.target.closest('.expense-card');
+            if (!card || !root.contains(card)) return;
+            const wasActive = card.classList.contains('active');
+            root.querySelectorAll('.expense-card.active').forEach(c => c.classList.remove('active'));
+            if (!wasActive) card.classList.add('active');
         });
     }
 
@@ -1074,12 +1102,12 @@ async function addNewCategory() {
     const icon = selectedNewIcon || '📁';
 
     if (!name) {
-        alert('Please enter a category name');
+        showToast('Please enter a category name', 'warning');
         return;
     }
 
     if (categories[name]) {
-        alert('Category already exists');
+        showToast('Category already exists', 'warning');
         return;
     }
 
@@ -1102,11 +1130,17 @@ async function addNewCategory() {
 
 async function deleteCategory(name) {
     if (Object.keys(defaultCategories).includes(name)) {
-        alert('Cannot delete default categories');
+        showToast('Default categories can’t be deleted', 'warning');
         return;
     }
 
-    if (confirm(`Delete category "${name}"? Expenses in this category will keep their category label.`)) {
+    const ok = await dialog.confirm({
+        title: `Delete “${name}”?`,
+        message: `Expenses in this category will keep their category label.`,
+        confirmText: 'Delete',
+        tone: 'danger'
+    });
+    if (ok) {
         delete categories[name];
         saveCategories();
         populateCategoryDropdowns();
@@ -1120,17 +1154,17 @@ async function addNewSubcategory() {
     const name = newSubcategoryName.value.trim();
 
     if (!category) {
-        alert('Please select a category first');
+        showToast('Please select a category first', 'warning');
         return;
     }
 
     if (!name) {
-        alert('Please enter a subcategory name');
+        showToast('Please enter a subcategory name', 'warning');
         return;
     }
 
     if (categories[category].subcategories.includes(name)) {
-        alert('Subcategory already exists');
+        showToast('Subcategory already exists', 'warning');
         return;
     }
 
@@ -1813,35 +1847,10 @@ function renderExpenses() {
 }
 
 // Renders the dashboard "Recent Activity" table + mobile cards.
-function renderRecentExpenses() {
-    const tbody = document.getElementById('recent-expense-tbody');
-    const cards = document.getElementById('recent-expense-cards');
-    const empty = document.getElementById('recent-empty-state');
-    const table = document.getElementById('recent-expense-table');
-    if (!tbody) return;
-
-    tbody.innerHTML = '';
-    if (cards) cards.innerHTML = '';
-
-    const recent = [...expenses]
-        .sort((a, b) => {
-            const d = (b.date || '').localeCompare(a.date || '');
-            if (d !== 0) return d;
-            return (b.timestamp || '').localeCompare(a.timestamp || '');
-        })
-        .slice(0, 10);
-
-    const isEmpty = recent.length === 0;
-    if (empty) empty.classList.toggle('visible', isEmpty);
-    if (table) table.classList.toggle('table-empty', isEmpty);
-    if (cards) cards.classList.toggle('table-empty', isEmpty);
-    if (isEmpty) return;
-
-    for (const exp of recent) {
-        tbody.appendChild(createExpenseRow(exp));
-        if (cards) cards.appendChild(createExpenseCard(exp));
-    }
-}
+// Now owned by js/features/expenses/expenses.ui.js (renderRecent).
+// This stub stays so legacy callers compile; the module subscribes to the
+// store and re-renders automatically whenever saveExpenses() fires the bridge.
+function renderRecentExpenses() { /* moved: js/features/expenses */ }
 
 function createExpenseRow(expense) {
     const tr = document.createElement('tr');
@@ -2041,27 +2050,38 @@ async function handleEditExpense(e) {
 
 // ===== Delete Expense =====
 async function deleteExpense(id) {
-    if (confirm('Are you sure you want to delete this expense?')) {
-        expenses = expenses.filter(e => String(e.id) !== String(id));
-        saveExpenses();
-        storage.deleteExpense(id);
+    const ok = await dialog.confirm({
+        title: 'Delete this entry?',
+        message: 'This can’t be undone.',
+        confirmText: 'Delete',
+        tone: 'danger'
+    });
+    if (!ok) return;
+    expenses = expenses.filter(e => String(e.id) !== String(id));
+    saveExpenses();
+    storage.deleteExpense(id);
 
-        renderExpenses();
-        updateStats();
-        renderCharts();
-        checkBudgetAlert();
-    }
+    renderExpenses();
+    updateStats();
+    renderCharts();
+    checkBudgetAlert();
 }
 
 async function handleDeleteAll() {
     if (expenses.length === 0) {
-        alert('No expenses to delete!');
+        showToast('No expenses to delete', 'warning');
         return;
     }
 
     // Guest / not signed in — single, clear confirm.
     if (!storage.isCloud()) {
-        if (!confirm(`Delete all ${expenses.length} expense(s) from this device?\n\nThis cannot be undone.`)) return;
+        const ok = await dialog.confirm({
+            title: `Delete all ${expenses.length} entries?`,
+            message: 'This cannot be undone.',
+            confirmText: 'Delete all',
+            tone: 'danger'
+        });
+        if (!ok) return;
         expenses = [];
         saveExpenses();
         renderExpenses();
@@ -2072,18 +2092,27 @@ async function handleDeleteAll() {
         return;
     }
 
-    // Signed in — explain that the cloud sheet is involved and offer scope.
-    // Use a custom prompt instead of confirm() because we have 3 outcomes.
-    const choice = (window.prompt(
-        `Reset data — choose what to delete:\n\n` +
-        `  1  Everything (local + your Google Sheet)\n` +
-        `  2  This device only (sheet untouched; will re-sync next time)\n` +
-        `  cancel  Keep my data\n\n` +
-        `Type 1, 2, or cancel:`
-    ) || '').trim().toLowerCase();
+    // Signed in — prompt for one of three outcomes via the in-app dialog.
+    const choice = await dialog.prompt({
+        title: 'Reset data',
+        message:
+            'Choose what to delete:\n' +
+            '  1  Everything (local + your Google Sheet)\n' +
+            '  2  This device only (sheet stays; resyncs later)\n' +
+            'Leave blank or press Cancel to keep your data.',
+        placeholder: '1 or 2',
+        confirmText: 'Continue'
+    });
+    const normalized = (choice || '').trim().toLowerCase();
 
-    if (choice === '1') {
-        if (!confirm('FINAL CONFIRM: Delete ALL expenses from this device AND your Google Sheet?\n\nThis cannot be undone.')) return;
+    if (normalized === '1') {
+        const ok = await dialog.confirm({
+            title: 'Final confirmation',
+            message: 'Delete ALL entries from this device AND your Google Sheet?\n\nThis cannot be undone.',
+            confirmText: 'Delete everything',
+            tone: 'danger'
+        });
+        if (!ok) return;
         expenses = [];
         saveExpenses();
         try {
@@ -2093,15 +2122,25 @@ async function handleDeleteAll() {
         } catch (e) {
             console.error(e);
             updateSyncStatus('error');
-            alert('Local data was cleared, but the Google Sheet could not be cleared. Please try again from the Profile page (Pull / Push).');
+            await dialog.alert({
+                title: 'Sheet not cleared',
+                message: 'Local data was cleared, but the Google Sheet could not be cleared. Please try again from the Profile page (Pull / Push).',
+                tone: 'error'
+            });
         }
         renderExpenses();
         updateStats();
         renderCharts();
         checkBudgetAlert();
         showToast('All data cleared', 'success');
-    } else if (choice === '2') {
-        if (!confirm('Clear data on this device only?\n\nYour Google Sheet stays untouched. Local data will be repopulated from the sheet on next sync.')) return;
+    } else if (normalized === '2') {
+        const ok = await dialog.confirm({
+            title: 'Clear this device only?',
+            message: 'Your Google Sheet stays untouched. Local data will be repopulated from the sheet on next sync.',
+            confirmText: 'Clear device',
+            tone: 'warn'
+        });
+        if (!ok) return;
         expenses = [];
         saveExpenses();
         renderExpenses();
@@ -2118,7 +2157,7 @@ async function handleDeleteAll() {
 // ===== Export to CSV =====
 function exportToCSV() {
     if (expenses.length === 0) {
-        alert('No expenses to export!');
+        showToast('No expenses to export', 'warning');
         return;
     }
 
@@ -2160,13 +2199,13 @@ function exportToCSV() {
 function importFromCSV(file) {
     const reader = new FileReader();
 
-    reader.onload = function (e) {
+    reader.onload = async function (e) {
         try {
             const content = e.target.result;
             const lines = content.split('\n').filter(line => line.trim());
 
             if (lines.length < 2) {
-                alert('CSV file is empty or has no data rows.');
+                await dialog.alert({ title: 'Import failed', message: 'CSV file is empty or has no data rows.', tone: 'error' });
                 return;
             }
 
@@ -2183,7 +2222,7 @@ function importFromCSV(file) {
 
             // Validate required columns
             if (dateIdx === -1 || categoryIdx === -1 || amountIdx === -1) {
-                alert('CSV must have at least: Date, Category, and Amount columns.');
+                await dialog.alert({ title: 'Import failed', message: 'CSV must have at least Date, Category, and Amount columns.', tone: 'error' });
                 return;
             }
 
@@ -2228,24 +2267,36 @@ function importFromCSV(file) {
             }
 
             if (newExpenses.length === 0) {
-                alert('No valid expenses found in CSV file.\n\nErrors:\n' + errors.slice(0, 5).join('\n'));
+                await dialog.alert({
+                    title: 'Nothing to import',
+                    message: 'No valid expenses found in CSV file.' + (errors.length ? '\n\nErrors:\n' + errors.slice(0, 5).join('\n') : ''),
+                    tone: 'error'
+                });
                 return;
             }
 
             // Ask user what to do
-            const action = confirm(
-                `Found ${newExpenses.length} expenses to import.\n\n` +
-                (errors.length > 0 ? `${errors.length} rows had errors.\n\n` : '') +
-                `Click OK to ADD to existing expenses.\n` +
-                `Click Cancel to REPLACE all existing expenses.`
-            );
+            const action = await dialog.confirm({
+                title: `Import ${newExpenses.length} entries?`,
+                message:
+                    (errors.length > 0 ? `${errors.length} rows had errors and were skipped.\n\n` : '') +
+                    `Choose “Add” to merge with existing entries, or “Replace” to overwrite everything.`,
+                confirmText: 'Add',
+                cancelText: 'Replace'
+            });
 
             if (action) {
                 // Add to existing
                 expenses = [...expenses, ...newExpenses];
             } else {
                 // Replace all
-                if (confirm('This will DELETE all existing expenses and replace with imported data. Continue?')) {
+                const confirmReplace = await dialog.confirm({
+                    title: 'Replace all entries?',
+                    message: 'This will DELETE all existing entries and replace them with the imported data.',
+                    confirmText: 'Replace',
+                    tone: 'danger'
+                });
+                if (confirmReplace) {
                     expenses = newExpenses;
                 } else {
                     return;
@@ -2262,11 +2313,11 @@ function importFromCSV(file) {
             renderCharts();
             checkBudgetAlert();
 
-            alert(`Successfully imported ${newExpenses.length} expenses!`);
+            showToast(`Imported ${newExpenses.length} entries`, 'success');
 
         } catch (error) {
             console.error('CSV import error:', error);
-            alert('Failed to parse CSV file. Please check the format.');
+            await dialog.alert({ title: 'Import failed', message: 'Failed to parse CSV file. Please check the format.', tone: 'error' });
         }
     };
 
@@ -2302,59 +2353,9 @@ function parseCSVLine(line) {
 }
 
 // ===== Statistics =====
-function updateStats() {
-    const todayEl  = document.getElementById('today-total');
-    const monthEl  = document.getElementById('month-total');
-    const totalEntriesEl = document.getElementById('total-entries');
-    const budgetStatusEl = document.getElementById('budget-status');
-    const budgetBarEl    = document.getElementById('budget-bar');
-    if (!todayEl) return;
-
-    const todayStr = getLocalDateString(new Date());
-    const monthStr = todayStr.substring(0, 7); // YYYY-MM
-
-    let todaySpend = 0;
-    let monthExpense = 0;
-    let monthIncome = 0;
-
-    for (const e of expenses) {
-        const amt = parseFloat(e.amount) || 0;
-        const inc = e.type === 'income' || (e.type !== 'expense' && e.category === 'Income');
-        const dateStr = (e.date || '').substring(0, 10);
-        if (dateStr === todayStr && !inc) todaySpend += amt;
-        if (dateStr.startsWith(monthStr)) {
-            if (inc) monthIncome += amt;
-            else monthExpense += amt;
-        }
-    }
-
-    todayEl.textContent  = formatCurrency(todaySpend);
-    monthEl.textContent  = formatCurrency(monthExpense);
-    if (totalEntriesEl) totalEntriesEl.textContent = String(expenses.length);
-
-    if (budgetStatusEl) {
-        if (monthIncome > 0) {
-            const remaining = monthIncome - monthExpense;
-            budgetStatusEl.textContent = formatCurrency(remaining);
-        } else {
-            budgetStatusEl.textContent = 'Not Set';
-        }
-    }
-
-    if (budgetBarEl) {
-        budgetBarEl.classList.remove('warning', 'danger');
-        const threshold = settings.warningThreshold || 80;
-        if (monthIncome > 0) {
-            const pct = (monthExpense / monthIncome) * 100;
-            budgetBarEl.style.width = Math.min(pct, 100) + '%';
-            if (pct >= 100) budgetBarEl.classList.add('danger');
-            else if (pct >= threshold) budgetBarEl.classList.add('warning');
-        } else {
-            budgetBarEl.style.width = '0%';
-            if (monthExpense > 0) budgetBarEl.classList.add('danger');
-        }
-    }
-}
+// Now owned by js/features/expenses/expenses.ui.js (renderStats).
+// This stub stays so legacy callers compile; module subscribes to the store.
+function updateStats() { /* moved: js/features/expenses */ }
 
 // ===== Utility Functions =====
 function formatDate(dateString) {
@@ -2456,7 +2457,11 @@ function setupAuthUi() {
 
     const doSignIn = async () => {
         if (!auth.isConfigured()) {
-            alert('Google sign-in is not configured for this deployment yet.\n\nSee OAUTH_SETUP.md for instructions.');
+            await dialog.alert({
+                title: 'Sign-in not configured',
+                message: 'Google sign-in is not configured for this deployment yet.\n\nSee OAUTH_SETUP.md for instructions.',
+                tone: 'error'
+            });
             return;
         }
         const ok = await auth.signIn();
@@ -2466,12 +2471,13 @@ function setupAuthUi() {
         }
     };
     const doSignOut = async () => {
-        const confirmed = confirm(
-            'Sign out and clear this device?\n\n' +
-            'Your data stays safe in your Google Sheet on Drive — this only ' +
-            'removes the local cached copy so the next person using this browser ' +
-            'doesn\'t see your data.'
-        );
+        const confirmed = await dialog.confirm({
+            title: 'Sign out of this device?',
+            message:
+                'Your data stays safe in your Google Sheet on Drive — this only removes the local cached copy so the next person using this browser doesn’t see your data.',
+            confirmText: 'Sign out',
+            tone: 'warn'
+        });
         if (!confirmed) return;
 
         await auth.signOut();
@@ -2492,15 +2498,23 @@ function setupAuthUi() {
 
     if (profilePullBtn) profilePullBtn.addEventListener('click', async () => {
         if (!storage.isCloud()) return;
-        if (confirm('Replace local data with the contents of your Google Sheet?')) {
-            await pullFromCloud();
-        }
+        const ok = await dialog.confirm({
+            title: 'Pull from sheet?',
+            message: 'Replace local data with the contents of your Google Sheet.',
+            confirmText: 'Pull',
+            tone: 'warn'
+        });
+        if (ok) await pullFromCloud();
     });
     if (profilePushBtn) profilePushBtn.addEventListener('click', async () => {
         if (!storage.isCloud()) return;
-        if (confirm('Overwrite your Google Sheet with all local data?')) {
-            await pushAllToCloud();
-        }
+        const ok = await dialog.confirm({
+            title: 'Push to sheet?',
+            message: 'Overwrite your Google Sheet with all local data.',
+            confirmText: 'Push',
+            tone: 'warn'
+        });
+        if (ok) await pushAllToCloud();
     });
 
     if (profileBtn && menu) {

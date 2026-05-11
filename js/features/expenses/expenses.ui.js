@@ -116,26 +116,29 @@ function buildRow(expense, categories, currency) {
 function buildCard(expense, categories, currency) {
     const div = document.createElement('div');
     div.className = 'expense-card';
+    div.dataset.id = expense.id;
     const cat = categories[expense.category] || { icon: '📋' };
     const inc = isIncome(expense);
     const amt = Number(expense.amount) || 0;
     const display = (inc ? '+ ' : '- ') + formatCurrency(amt, currency);
     const cls = inc ? 'income-amount' : 'expense-amount';
     const desc = expense.description || '';
+    const meta = formatDate(expense.date) + (desc ? ' · ' + escapeHtml(desc) : '');
 
     div.innerHTML = `
-        <div class="expense-card-header">
-            <span class="category-badge" data-category="${escapeAttr(expense.category)}">${cat.icon} ${escapeHtml(expense.category)}</span>
-            <span class="${cls}">${display}</span>
-        </div>
-        <div class="expense-card-body">
-            <div class="expense-card-row"><span>📅</span> ${formatDate(expense.date)}</div>
-            <div class="expense-card-row"><span>🏷️</span> ${escapeHtml(expense.subcategory)}</div>
-            ${desc ? `<div class="expense-card-row"><span>📝</span> ${escapeHtml(desc)}</div>` : ''}
+        <div class="expense-card-main" data-category="${escapeAttr(expense.category)}">
+            <div class="expense-card-left">
+                <span class="expense-card-icon">${cat.icon}</span>
+            </div>
+            <div class="expense-card-center">
+                <span class="expense-card-title">${escapeHtml(expense.subcategory)}</span>
+                <span class="expense-card-meta">${meta}</span>
+            </div>
+            <span class="expense-card-amount ${cls}">${display}</span>
         </div>
         <div class="expense-card-actions">
-            <button class="btn-edit" data-action="edit" data-id="${escapeAttr(expense.id)}">✏️ Edit</button>
-            <button class="btn-delete" data-action="delete" data-id="${escapeAttr(expense.id)}">🗑️ Delete</button>
+            <button class="btn-card-edit" data-action="edit" data-id="${escapeAttr(expense.id)}">✏️ Edit</button>
+            <button class="btn-card-delete" data-action="delete" data-id="${escapeAttr(expense.id)}">🗑️ Delete</button>
         </div>`;
     return div;
 }
