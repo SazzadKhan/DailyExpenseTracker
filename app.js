@@ -959,25 +959,21 @@ function buildCatCard(name, data, defaultNames) {
 
     const subChips = data.subcategories.map(sub => {
         const isDefSub = defaultSubs.includes(sub);
-        const removable = !isDefSub;
         return `
             <span class="cat-sub-chip${isDefSub ? ' is-default' : ''}">
                 <span class="cat-sub-chip-label">${escapeHtmlSafe(sub)}</span>
-                ${removable
-                    ? `<button type="button" class="cat-sub-chip-x" data-action="del-sub" data-sub="${escapeAttrSafe(sub)}" title="Remove">×</button>`
-                    : ''}
+                <button type="button" class="cat-sub-chip-x" data-action="del-sub" data-sub="${escapeAttrSafe(sub)}" title="Remove">×</button>
             </span>`;
     }).join('') || `<span class="cat-sub-empty">No subcategories yet</span>`;
 
-    const delTitle = isDefault ? 'Default categories can\u2019t be deleted' : 'Delete category';
     card.innerHTML = `
         <div class="cat-card-head">
             <span class="cat-card-icon">${data.icon || '📁'}</span>
             <span class="cat-card-name">${escapeHtmlSafe(name)}</span>
             ${isDefault ? '<span class="cat-card-badge">Default</span>' : ''}
             <span class="cat-card-actions">
-                <button type="button" class="cat-card-btn" data-action="edit-cat" title="Change icon">✏️</button>
-                <button type="button" class="cat-card-btn danger" data-action="del-cat" title="${delTitle}" ${isDefault ? 'disabled' : ''}>🗑️</button>
+                <button type="button" class="cat-card-btn" data-action="edit-cat" title="Edit name & icon">✏️</button>
+                <button type="button" class="cat-card-btn danger" data-action="del-cat" title="Delete category">🗑️</button>
             </span>
         </div>
         <div class="cat-card-subs">${subChips}</div>
@@ -1066,13 +1062,33 @@ function closeEditCategoryModal() {
 }
 
 function saveEditCategory() {
-    if (!currentEditingCategoryName || !categories[currentEditingCategoryName]) return;
-    categories[currentEditingCategoryName].icon = selectedEditIcon;
+    const oldName = currentEditingCategoryName;
+    if (!oldName || !categories[oldName]) return;
+    const newName = (editCategoryNameInput?.value || '').trim();
+    if (!newName) { showToast('Name required', 'warning'); return; }
+    if (newName !== oldName && categories[newName]) {
+        showToast('That category already exists', 'warning'); return;
+    }
+    categories[oldName].icon = selectedEditIcon;
+    if (newName !== oldName) {
+        // Rebuild to preserve insertion order while renaming the key.
+        const rebuilt = {};
+        for (const [k, v] of Object.entries(categories)) {
+            rebuilt[k === oldName ? newName : k] = v;
+        }
+        categories = rebuilt;
+        // Migrate any existing expenses to the new category name.
+        let migrated = 0;
+        expenses.forEach(e => { if (e.category === oldName) { e.category = newName; migrated++; } });
+        if (migrated > 0) saveExpenses();
+    }
     saveCategories();
     populateCategoryDropdowns();
     renderCategoryList();
+    renderExpenses();
+    updateStats();
     closeEditCategoryModal();
-    showToast('Category icon updated!', 'success');
+    showToast('Category updated', 'success');
 }
 
 function renderSubcategoryList() {
@@ -1129,23 +1145,17 @@ async function addNewCategory() {
 }
 
 async function deleteCategory(name) {
-    if (Object.keys(defaultCategories).includes(name)) {
-        showToast('Default categories can’t be deleted', 'warning');
-        return;
-    }
-
     const ok = await dialog.confirm({
         title: `Delete “${name}”?`,
         message: `Expenses in this category will keep their category label.`,
         confirmText: 'Delete',
         tone: 'danger'
     });
-    if (ok) {
-        delete categories[name];
-        saveCategories();
-        populateCategoryDropdowns();
-        renderCategoryList();
-    }
+    if (!ok) return;
+    delete categories[name];
+    saveCategories();
+    populateCategoryDropdowns();
+    renderCategoryList();
 }
 
 async function addNewSubcategory() {
@@ -1177,10 +1187,13 @@ async function addNewSubcategory() {
 }
 
 async function deleteSubcategory(category, subcategory) {
+    if (!categories[category]) return;
     const index = categories[category].subcategories.indexOf(subcategory);
     if (index > -1) {
         categories[category].subcategories.splice(index, 1);
         saveCategories();
+        populateCategoryDropdowns();
+        renderCategoryList();
         renderSubcategoryList();
     }
 }
@@ -1694,6 +1707,17 @@ function buildAddCategoryPicker() {
         tile.addEventListener('click', () => selectAddCategory(name));
         grid.appendChild(tile);
     });
+
+    // Quick-add tile at the end so users can create a new category without leaving the modal.
+    const addTile = document.createElement('button');
+    addTile.type = 'button';
+    addTile.className = 'category-tile category-tile-add';
+    addTile.innerHTML = `
+        <span class="tile-icon">＋</span>
+        <span class="tile-name">New</span>
+    `;
+    addTile.addEventListener('click', () => quickAddCategoryFromLog());
+    grid.appendChild(addTile);
 }
 
 function selectAddCategory(name) {
@@ -1728,7 +1752,14 @@ function buildAddSubcategoryChips(category) {
 
     const subs = categories[category].subcategories || [];
     if (subs.length === 0) {
-        section.style.display = 'none';
+        // Still show the section so the user can add the first subcategory inline.
+        section.style.display = '';
+        const addChip = document.createElement('button');
+        addChip.type = 'button';
+        addChip.className = 'chip chip-add';
+        addChip.textContent = '＋ New';
+        addChip.addEventListener('click', () => quickAddSubcategoryFromLog(category));
+        wrap.appendChild(addChip);
         return;
     }
 
@@ -1748,6 +1779,62 @@ function buildAddSubcategoryChips(category) {
         });
         wrap.appendChild(chip);
     });
+
+    // Quick-add chip at the end.
+    const addChip = document.createElement('button');
+    addChip.type = 'button';
+    addChip.className = 'chip chip-add';
+    addChip.textContent = '＋ New';
+    addChip.addEventListener('click', () => quickAddSubcategoryFromLog(category));
+    wrap.appendChild(addChip);
+}
+
+async function quickAddCategoryFromLog() {
+    const name = await dialog.prompt({
+        title: 'New category',
+        message: 'You can change the icon later in Categories.',
+        placeholder: 'e.g. Pets',
+        confirmText: 'Add',
+        tone: 'question'
+    });
+    if (name == null) return;
+    const trimmed = String(name).trim();
+    if (!trimmed) return;
+    if (categories[trimmed]) { showToast('Category already exists', 'warning'); return; }
+    categories[trimmed] = { icon: '📁', subcategories: [] };
+    saveCategories();
+    populateCategoryDropdowns();
+    buildAddCategoryPicker();
+    selectAddCategory(trimmed);
+    showToast(`Added “${trimmed}”`, 'success');
+}
+
+async function quickAddSubcategoryFromLog(category) {
+    if (!category || !categories[category]) return;
+    const name = await dialog.prompt({
+        title: `New subcategory in “${category}”`,
+        placeholder: 'e.g. Coffee',
+        confirmText: 'Add',
+        tone: 'question'
+    });
+    if (name == null) return;
+    const trimmed = String(name).trim();
+    if (!trimmed) return;
+    if (categories[category].subcategories.includes(trimmed)) {
+        showToast('Subcategory already exists', 'warning');
+        return;
+    }
+    categories[category].subcategories.push(trimmed);
+    saveCategories();
+    populateCategoryDropdowns();
+    buildAddSubcategoryChips(category);
+    // Auto-select the new subcategory.
+    expenseSubcategory.value = trimmed;
+    document.querySelectorAll('#expense-subcategory-chips .chip').forEach(c => {
+        c.classList.toggle('selected', c.dataset.sub === trimmed);
+    });
+    const subSel = document.getElementById('picker-subcategory-selected');
+    if (subSel) subSel.textContent = trimmed;
 }
 
 // ===== Add Transaction =====

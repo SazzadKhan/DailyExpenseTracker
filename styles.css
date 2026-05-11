@@ -3461,6 +3461,23 @@ body.landing-open { overflow: hidden; }
     padding: 2px;
 }
 
+.category-tile-add {
+    border-style: dashed !important;
+    opacity: 0.85;
+}
+.category-tile-add:hover {
+    opacity: 1;
+    border-style: solid !important;
+}
+.chip-add {
+    border-style: dashed !important;
+    opacity: 0.85;
+}
+.chip-add:hover {
+    opacity: 1;
+    border-style: solid !important;
+}
+
 .category-tile {
     display: flex;
     flex-direction: column;
