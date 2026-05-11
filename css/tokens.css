@@ -1,0 +1,139 @@
+/* css/tokens.css
+   Design tokens (CSS custom properties) and theme variants.
+   Loaded BEFORE styles.css. Edit theme colors here, not in styles.css.
+
+   To add a theme:
+     1. Add a `[data-theme="<name>"] { ... }` block below.
+     2. Add the name to THEMES in js/core/constants.js.
+     3. Add an <option> to #theme-select in index.html.
+
+   These rules currently coexist with the same blocks at the top of
+   styles.css (identical values). The styles.css copy will be deleted
+   in a later cleanup pass once Phase 5 component extraction lands.
+*/
+
+:root {
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --primary-light: #818cf8;
+    --secondary: #10b981;
+    --secondary-dark: #059669;
+    --danger: #ef4444;
+    --danger-dark: #dc2626;
+    --warning: #f59e0b;
+    --warning-light: #fbbf24;
+
+    --bg-dark: #0f172a;
+    --bg-card: #1e293b;
+    --bg-input: #334155;
+    --bg-hover: #475569;
+
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+
+    --border: #334155;
+    --border-light: #475569;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== Theme: Panda (Black & White) ===== */
+[data-theme="panda"] {
+    --primary: #333333;
+    --primary-dark: #1a1a1a;
+    --primary-light: #555555;
+    --secondary: #666666;
+    --secondary-dark: #4a4a4a;
+    --danger: #ff4444;
+    --danger-dark: #cc0000;
+    --warning: #ffaa00;
+    --warning-light: #ffcc44;
+
+    --bg-dark: #ffffff;
+    --bg-card: #f5f5f5;
+    --bg-input: #e8e8e8;
+    --bg-hover: #dddddd;
+
+    --text-primary: #1a1a1a;
+    --text-secondary: #444444;
+    --text-muted: #888888;
+
+    --border: #cccccc;
+    --border-light: #dddddd;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+}
+
+/* ===== Theme: Peaceful (Green & White) ===== */
+[data-theme="peaceful"] {
+    --primary: #22c55e;
+    --primary-dark: #16a34a;
+    --primary-light: #4ade80;
+    --secondary: #14b8a6;
+    --secondary-dark: #0d9488;
+    --danger: #ef4444;
+    --danger-dark: #dc2626;
+    --warning: #eab308;
+    --warning-light: #facc15;
+
+    --bg-dark: #f0fdf4;
+    --bg-card: #ffffff;
+    --bg-input: #ecfdf5;
+    --bg-hover: #dcfce7;
+
+    --text-primary: #14532d;
+    --text-secondary: #166534;
+    --text-muted: #4ade80;
+
+    --border: #bbf7d0;
+    --border-light: #dcfce7;
+
+    --shadow-sm: 0 1px 2px rgba(22, 163, 74, 0.1);
+    --shadow-md: 0 4px 6px -1px rgba(22, 163, 74, 0.15);
+    --shadow-lg: 0 10px 15px -3px rgba(22, 163, 74, 0.2);
+    --shadow-xl: 0 20px 25px -5px rgba(22, 163, 74, 0.25);
+}
+
+/* ===== Theme: Edgy (Black & Red) ===== */
+[data-theme="edgy"] {
+    --primary: #dc2626;
+    --primary-dark: #b91c1c;
+    --primary-light: #ef4444;
+    --secondary: #f97316;
+    --secondary-dark: #ea580c;
+    --danger: #fbbf24;
+    --danger-dark: #f59e0b;
+    --warning: #facc15;
+    --warning-light: #fde047;
+
+    --bg-dark: #0a0a0a;
+    --bg-card: #171717;
+    --bg-input: #262626;
+    --bg-hover: #333333;
+
+    --text-primary: #fafafa;
+    --text-secondary: #a3a3a3;
+    --text-muted: #737373;
+
+    --border: #404040;
+    --border-light: #525252;
+
+    --shadow-sm: 0 1px 2px rgba(220, 38, 38, 0.2);
+    --shadow-md: 0 4px 6px -1px rgba(220, 38, 38, 0.25);
+    --shadow-lg: 0 10px 15px -3px rgba(220, 38, 38, 0.3);
+    --shadow-xl: 0 20px 25px -5px rgba(220, 38, 38, 0.35);
+}

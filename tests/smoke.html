@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smoke tests — pure model layer</title>
+    <style>
+        body { font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; padding: 24px; background:#0f172a; color:#f8fafc;}
+        h1 { margin: 0 0 16px; }
+        #summary { font-size: 18px; margin-bottom: 16px; }
+        .ok   { color:#10b981; }
+        .fail { color:#ef4444; }
+        ol { padding-left: 24px; }
+        li { margin: 2px 0; font-family: ui-monospace, Menlo, monospace; }
+        .fail-detail { color:#fbbf24; margin-left: 8px; }
+        code { background:#1e293b; padding: 2px 6px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Pure-model smoke tests</h1>
+    <p>Run with the dev server: <code>npx --yes http-server . -p 8000</code> then visit
+       <code>/tests/smoke.html</code>.</p>
+    <div id="summary">running…</div>
+    <ol id="results"></ol>
+
+    <script type="module">
+        import {
+            selectStats, selectRecent, isIncome, sortByDateDesc
+        } from '../js/features/expenses/expenses.model.js';
+        import { applyFilters, emptyFilters }
+            from '../js/features/filters/filters.model.js';
+        import {
+            selectDailySeries, selectMonthlyTotals, selectCategoryBreakdown
+        } from '../js/features/charts/charts.model.js';
+        import { splitByType, isIncomeCategory, isDefaultCategory }
+            from '../js/features/categories/categories.model.js';
+        import { getLocalDateString, normalizeDateString, formatCurrency }
+            from '../js/core/format.js';
+
+        const results = [];
+        function t(name, fn) {
+            try { fn(); results.push({ name, ok: true }); }
+            catch (err) { results.push({ name, ok: false, err: String(err) }); }
+        }
+        function assertEq(actual, expected, msg = '') {
+            const a = JSON.stringify(actual), b = JSON.stringify(expected);
+            if (a !== b) throw new Error(`${msg}\n  expected: ${b}\n  actual:   ${a}`);
+        }
+        function assert(cond, msg = 'assertion failed') {
+            if (!cond) throw new Error(msg);
+        }
+
+        const today = getLocalDateString(new Date());
+        const month = today.slice(0, 7);
+        const sample = [
+            { id:'1', type:'expense', date: today,             category:'Food & Dining', subcategory:'Coffee & Snacks', amount: 5,   description:'latte',  currency:'USD' },
+            { id:'2', type:'expense', date: today,             category:'Transportation',subcategory:'Fuel/Gas',        amount: 40,  description:'gas',    currency:'USD' },
+            { id:'3', type:'income',  date: today,             category:'Income',        subcategory:'Salary',          amount: 2000,description:'pay',    currency:'USD' },
+            { id:'4', type:'expense', date: `${month}-01`,     category:'Shopping',      subcategory:'Clothes',         amount: 80,  description:'shirt',  currency:'USD' },
+            { id:'5', type:'expense', date: '2025-01-15',      category:'Food & Dining', subcategory:'Groceries',       amount: 60,  description:'old',    currency:'USD' }
+        ];
+
+        // ---- format helpers ----------------------------------------------------
+        t('getLocalDateString returns YYYY-MM-DD', () => {
+            const s = getLocalDateString(new Date(2026, 4, 11));
+            assertEq(s, '2026-05-11');
+        });
+        t('normalizeDateString passes plain dates through', () => {
+            assertEq(normalizeDateString('2026-05-11'), '2026-05-11');
+        });
+        t('formatCurrency formats USD', () => {
+            assert(formatCurrency(12.5, 'USD').includes('12.50'));
+        });
+
+        // ---- expenses.model ----------------------------------------------------
+        t('isIncome detects income type and Income category', () => {
+            assertEq(isIncome(sample[2]), true);
+            assertEq(isIncome(sample[0]), false);
+        });
+        t('sortByDateDesc puts newer first', () => {
+            const s = sortByDateDesc(sample).map(e => e.id);
+            assertEq(s[s.length - 1], '5');
+        });
+        t('selectStats sums today and month correctly', () => {
+            const s = selectStats(sample);
+            assertEq(s.todaySpend, 45);          // 5 + 40
+            assertEq(s.monthIncome, 2000);
+            assertEq(s.monthExpense, 125);       // 5 + 40 + 80
+            assertEq(s.remaining, 1875);
+            assertEq(s.totalEntries, 5);
+        });
+        t('selectRecent caps the list and orders by date desc', () => {
+            const r = selectRecent(sample, 3);
+            assertEq(r.length, 3);
+            assertEq(r[r.length - 1].date <= r[0].date, true);
+        });
+
+        // ---- filters.model -----------------------------------------------------
+        t('applyFilters: empty filter returns full list', () => {
+            assertEq(applyFilters(sample, emptyFilters()).length, sample.length);
+        });
+        t('applyFilters: date range narrows', () => {
+            const out = applyFilters(sample, { ...emptyFilters(), dateFrom: today, dateTo: today });
+            assertEq(out.length, 3);
+        });
+        t('applyFilters: category narrows', () => {
+            const out = applyFilters(sample, { ...emptyFilters(), category: 'Food & Dining' });
+            assertEq(out.length, 2);
+        });
+        t('applyFilters: search matches description/category/subcategory', () => {
+            assertEq(applyFilters(sample, { ...emptyFilters(), search: 'latte' }).length, 1);
+            assertEq(applyFilters(sample, { ...emptyFilters(), search: 'transport' }).length, 1);
+            assertEq(applyFilters(sample, { ...emptyFilters(), search: 'fuel' }).length, 1);
+        });
+
+        // ---- charts.model ------------------------------------------------------
+        t('selectDailySeries excludes income entries', () => {
+            const series = selectDailySeries(sample, 30);
+            const todayPoint = series.find(p => p.date === today);
+            assert(todayPoint, 'today point exists');
+            assertEq(todayPoint.total, 45); // 5 + 40, NO income
+        });
+        t('selectMonthlyTotals groups income vs expense per month', () => {
+            const m = selectMonthlyTotals(sample);
+            const cur = m.find(x => x.month === month);
+            assert(cur);
+            assertEq(cur.income, 2000);
+            assertEq(cur.expense, 125);
+        });
+        t('selectCategoryBreakdown sorts desc and excludes income', () => {
+            const b = selectCategoryBreakdown(sample, month);
+            assertEq(b[0].category, 'Shopping'); // 80 > 40 > 5
+            assert(!b.some(x => x.category === 'Income'));
+        });
+
+        // ---- categories.model --------------------------------------------------
+        t('isIncomeCategory + isDefaultCategory', () => {
+            assertEq(isIncomeCategory('Income'), true);
+            assertEq(isIncomeCategory('Food & Dining'), false);
+            assertEq(isDefaultCategory('Income'), true);
+            assertEq(isDefaultCategory('Made Up Category'), false);
+        });
+        t('splitByType separates income from expense entries', () => {
+            const cats = {
+                'Income': { icon: '💰', subcategories: [] },
+                'Food & Dining': { icon: '🍔', subcategories: [] }
+            };
+            const { income, expense } = splitByType(cats);
+            assertEq(income.length, 1);
+            assertEq(expense.length, 1);
+            assertEq(income[0][0], 'Income');
+        });
+
+        // ---- render --------
+        const summary = document.getElementById('summary');
+        const ol = document.getElementById('results');
+        const failed = results.filter(r => !r.ok);
+        summary.innerHTML = failed.length === 0
+            ? `<span class="ok">✓ ${results.length}/${results.length} passed</span>`
+            : `<span class="fail">✗ ${failed.length} failed</span> · ${results.length - failed.length} passed`;
+
+        for (const r of results) {
+            const li = document.createElement('li');
+            li.innerHTML = r.ok
+                ? `<span class="ok">✓</span> ${r.name}`
+                : `<span class="fail">✗</span> ${r.name}<div class="fail-detail">${r.err.replace(/</g,'&lt;')}</div>`;
+            ol.appendChild(li);
+        }
+    </script>
+</body>
+</html>

@@ -7,6 +7,8 @@
     <title>Daily Expense Tracker</title>
     <meta name="description" content="Track your daily expenses with categories, subcategories, and notes">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="effects.css">
+    <link rel="stylesheet" href="categories.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1/dist/polyfill.umd.js"></script>
@@ -349,7 +351,6 @@
             <div class="settings-tabs">
                 <button class="settings-tab active" data-tab="general">🎨 General</button>
                 <button class="settings-tab" data-tab="budget">🔔 Alerts</button>
-                <button class="settings-tab" data-tab="categories">📁 Categories</button>
                 <button class="settings-tab" data-tab="data">💾 Data</button>
             </div>
 
@@ -430,50 +431,34 @@
                     <button class="btn-save" id="save-budget">💾 Save Income Settings</button>
                 </div>
             </div>
+                </section>
+            </div>
 
-            <!-- Categories Tab -->
-            <div class="settings-content hidden" id="categories-tab">
-                <h4>Manage Categories</h4>
-                <div class="category-manager">
-                    <div class="add-category-form">
-                        <div class="form-group">
-                            <label for="new-category-name">Category Name</label>
-                            <input type="text" id="new-category-name" placeholder="Enter category name..."
-                                maxlength="30">
-                        </div>
-                        <div class="form-group">
-                            <label>Icon</label>
-                            <div class="emoji-picker-wrapper">
-                                <button type="button" class="emoji-selected-display" id="new-category-icon-btn" title="Click to choose icon">📁</button>
-                                <span class="emoji-hint">← Click to pick an icon</span>
-                            </div>
-                            <div class="emoji-picker-grid" id="new-emoji-picker" style="display:none;"></div>
-                        </div>
-                        <button class="btn-add-category" id="add-category">➕ Add Category</button>
-                    </div>
-                    <div class="category-list" id="category-list">
-                        <!-- Categories will be populated here -->
-                    </div>
-                </div>
+            <!-- Categories Tab content moved to standalone nav-page -->
 
-                <h4 style="margin-top: 30px;">Manage Subcategories</h4>
-                <div class="subcategory-manager">
-                    <div class="form-group">
-                        <label for="subcategory-category">Select Category</label>
-                        <select id="subcategory-category">
-                            <!-- Categories populated by JS -->
-                        </select>
+            <!-- Categories Page (standalone) -->
+            <div class="nav-page" data-page="categories">
+                <section class="cat-page">
+                    <header class="cat-page-header">
+                        <h2 class="section-title">
+                            <span class="title-icon">📁</span>
+                            Categories
+                        </h2>
+                        <p class="cat-page-sub">Group your transactions. Default categories can be customized but not deleted.</p>
+                    </header>
+
+                    <div class="cat-add-bar">
+                        <button type="button" class="cat-add-icon-btn emoji-selected-display" id="new-category-icon-btn" title="Pick icon">📁</button>
+                        <input type="text" id="new-category-name" placeholder="Add a new category…" maxlength="30" autocomplete="off">
+                        <button class="cat-add-submit" id="add-category">
+                            <span class="cat-add-submit-icon">＋</span>
+                            <span class="cat-add-submit-label">Add</span>
+                        </button>
                     </div>
-                    <div class="add-subcategory-form">
-                        <div class="form-group">
-                            <label for="new-subcategory-name">Subcategory Name</label>
-                            <input type="text" id="new-subcategory-name" placeholder="Enter subcategory name..."
-                                maxlength="30">
-                        </div>
-                        <button class="btn-add-category" id="add-subcategory">➕ Add Subcategory</button>
-                    </div>
-                    <div class="subcategory-list" id="subcategory-list">
-                        <!-- Subcategories will be populated here -->
+                    <div class="emoji-picker-grid cat-emoji-picker" id="new-emoji-picker" style="display:none;"></div>
+
+                    <div class="cat-groups" id="category-list">
+                        <!-- JS renders grouped category cards here -->
                     </div>
                 </section>
             </div>
@@ -770,6 +755,10 @@
             <span class="nav-icon">📊</span>
             <span class="nav-label">Insight and Stats</span>
         </button>
+        <button class="nav-item" data-page="categories">
+            <span class="nav-icon">📁</span>
+            <span class="nav-label">Categories</span>
+        </button>
         <button class="nav-item" data-page="settings">
             <span class="nav-icon">⚙️</span>
             <span class="nav-label">Settings</span>
@@ -784,6 +773,7 @@
     <script src="sheets-api.js"></script>
     <script src="storage.js"></script>
     <script src="app.js"></script>
+    <script src="effects.js" defer></script>
 </body>
 
 </html>

@@ -1,0 +1,332 @@
+/* ============================================================
+   Categories Page — clean card-based layout
+   ============================================================ */
+
+.cat-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 20px 40px;
+}
+
+.cat-page-header {
+    margin-bottom: 22px;
+}
+
+.cat-page-sub {
+    margin: 6px 0 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+}
+
+/* ---- Add bar ---- */
+.cat-add-bar {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+    margin-bottom: 6px;
+}
+
+.cat-add-icon-btn {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    font-size: 1.7rem;
+    background: var(--bg-input);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s, background 0.2s, transform 0.18s;
+}
+.cat-add-icon-btn:hover { border-color: var(--primary); }
+
+.cat-add-bar input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    height: 48px;
+    background: var(--bg-input);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 0 14px;
+    color: var(--text-primary);
+    font-size: 0.98rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.cat-add-bar input[type="text"]:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
+}
+
+.cat-add-submit {
+    flex: 0 0 auto;
+    height: 48px;
+    padding: 0 18px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark, #4f46e5));
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: transform 0.15s, box-shadow 0.2s, filter 0.2s;
+}
+.cat-add-submit:hover { filter: brightness(1.08); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35); }
+.cat-add-submit:active { transform: scale(0.97); }
+.cat-add-submit-icon { font-size: 1.2rem; line-height: 1; }
+
+.cat-emoji-picker {
+    margin-bottom: 18px;
+}
+
+/* ---- Group headers ---- */
+.cat-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    margin-top: 24px;
+}
+
+.cat-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 0 2px;
+}
+.cat-group-icon {
+    font-size: 1.2rem;
+}
+.cat-group-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary, #cbd5e1);
+}
+.cat-group-count {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    padding: 2px 9px;
+    border-radius: 999px;
+}
+
+/* ---- Card grid ---- */
+.cat-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+}
+
+.cat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: transform 0.2s var(--ease-snappy, cubic-bezier(0.2, 0.8, 0.2, 1)),
+                border-color 0.25s, box-shadow 0.25s;
+}
+.cat-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+.cat-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.cat-card-icon {
+    font-size: 1.55rem;
+    line-height: 1;
+}
+.cat-card-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cat-card-badge {
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.cat-card-actions {
+    display: inline-flex;
+    gap: 4px;
+}
+.cat-card-btn {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: background 0.18s, border-color 0.18s, transform 0.15s;
+}
+.cat-card-btn:hover:not(:disabled) {
+    background: var(--bg-input);
+    border-color: var(--border);
+}
+.cat-card-btn.danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.45);
+}
+.cat-card-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* ---- Subcategory chips ---- */
+.cat-card-subs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 26px;
+}
+.cat-sub-empty {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-style: italic;
+    padding: 2px 0;
+}
+.cat-sub-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 4px 4px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    line-height: 1;
+    transition: background 0.18s, border-color 0.18s, transform 0.15s;
+}
+.cat-sub-chip:hover {
+    border-color: var(--primary);
+}
+.cat-sub-chip.is-default {
+    padding-right: 10px;
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.25);
+}
+.cat-sub-chip-label {
+    white-space: nowrap;
+}
+.cat-sub-chip-x {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.05rem;
+    line-height: 1;
+    padding: 0;
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+.cat-sub-chip-x:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    transform: scale(1.1);
+}
+
+/* ---- Inline add subcategory ---- */
+.cat-card-add {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+}
+.cat-card-add input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: var(--text-primary);
+    font-size: 0.86rem;
+    outline: none;
+    transition: background 0.18s, border-color 0.18s;
+}
+.cat-card-add input::placeholder {
+    color: var(--text-muted);
+}
+.cat-card-add input:focus,
+.cat-card-add input:not(:placeholder-shown) {
+    background: var(--bg-input);
+    border-color: var(--border);
+}
+.cat-card-add input:focus {
+    border-color: var(--primary);
+}
+.cat-card-add-btn {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 1rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.18s, border-color 0.18s, transform 0.15s;
+}
+.cat-card-add-btn:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+/* ---- Mobile tweaks ---- */
+@media (max-width: 540px) {
+    .cat-page { padding: 16px 12px 90px; }
+    .cat-add-bar { flex-wrap: wrap; }
+    .cat-add-bar input[type="text"] { order: 1; flex: 1 1 100%; }
+    .cat-add-bar { padding: 8px; }
+    .cat-card-grid { grid-template-columns: 1fr; }
+    .cat-add-submit-label { display: none; }
+    .cat-add-submit { padding: 0 14px; }
+}

@@ -228,6 +228,7 @@ async function pullFromCloud() {
                 return exp;
             });
             localStorage.setItem('expenses', JSON.stringify(expenses));
+            window.__bridge && window.__bridge.notifyExpenses(expenses);
 
             if (data.settings && Object.keys(data.settings).length > 0) {
                 settings = { ...settings, ...data.settings };
@@ -236,6 +237,7 @@ async function pullFromCloud() {
                 // Sheet has no settings yet — seed it with current defaults.
                 storage.saveSettings(settings);
             }
+            window.__bridge && window.__bridge.notifySettings(settings);
 
             if (data.categories && Object.keys(data.categories).length > 0) {
                 categories = data.categories;
@@ -248,6 +250,7 @@ async function pullFromCloud() {
                 // Sheet has no categories yet — seed it with current defaults.
                 storage.saveCategories(categories);
             }
+            window.__bridge && window.__bridge.notifyCategories(categories);
         }
 
         lastSyncTime = new Date();
@@ -435,10 +438,16 @@ async function activateCloudBackend({ initial = false } = {}) {
             try { localStorage.setItem('lastSignedInEmail', newEmail); } catch (_) {}
         }
 
-        // Migration prompt: only offer to upload local data when transitioning
-        // from guest mode (i.e., this is a brand-new sign-in AND we didn't just
-        // switch accounts AND there's actually local data to migrate).
-        if (initial === false && !switchedAccount && expenses.length > 0) {
+        // Migration prompt: only offer to upload local data on the FIRST
+        // sign-in for this Google account on this device. After the first
+        // pull/push, local data is just a mirror of the sheet, so re-prompting
+        // every sign-in is noise.
+        const migrationKey = newEmail ? `cloudMigrated:${newEmail}` : null;
+        const alreadyMigrated = migrationKey
+            ? (() => { try { return localStorage.getItem(migrationKey) === '1'; } catch { return false; } })()
+            : false;
+
+        if (initial === false && !switchedAccount && !alreadyMigrated && expenses.length > 0) {
             const wantsMigrate = confirm(
                 `You have ${expenses.length} local expense(s). Upload them to your Google Sheet?\n\n` +
                 `Click "OK" to upload your local data, or "Cancel" to use whatever's already in your sheet (local data may be overwritten).`
@@ -448,6 +457,11 @@ async function activateCloudBackend({ initial = false } = {}) {
             }
         }
         await pullFromCloud();
+
+        // Mark this account as initialized so we never re-prompt for migration.
+        if (migrationKey) {
+            try { localStorage.setItem(migrationKey, '1'); } catch (_) {}
+        }
     } catch (e) {
         console.error('[cloud] activation failed', e);
         updateSyncStatus('error');
@@ -482,6 +496,13 @@ function wipeLocalData({ keepSettings = false } = {}) {
         }
         toRemove.forEach(k => localStorage.removeItem(k));
     } catch (_) {}
+
+    // Notify modular store of the wipe.
+    if (window.__bridge) {
+        window.__bridge.notifyExpenses(expenses);
+        window.__bridge.notifyCategories(categories);
+        if (!keepSettings) window.__bridge.notifySettings(settings);
+    }
 
     // Re-render so the UI reflects the wipe immediately.
     if (typeof populateCategoryDropdowns === 'function') populateCategoryDropdowns();
@@ -606,9 +627,16 @@ function setupEventListeners() {
     saveBudgetBtn.addEventListener('click', saveBudgetSettings);
 
     // Category Management
-    addCategoryBtn.addEventListener('click', addNewCategory);
-    subcategoryCategory.addEventListener('change', renderSubcategoryList);
-    addSubcategoryBtn.addEventListener('click', addNewSubcategory);
+    if (addCategoryBtn) addCategoryBtn.addEventListener('click', addNewCategory);
+    if (subcategoryCategory) subcategoryCategory.addEventListener('change', renderSubcategoryList);
+    if (addSubcategoryBtn) addSubcategoryBtn.addEventListener('click', addNewSubcategory);
+
+    // Enter key in the "Add Category" name input
+    if (newCategoryName) {
+        newCategoryName.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); addNewCategory(); }
+        });
+    }
 
     // New-category emoji picker toggle
     newCategoryIconBtn.addEventListener('click', (e) => {
@@ -797,7 +825,7 @@ function populateCategoryDropdowns() {
     // expenseCategory is now a hidden input driven by the visual picker — rebuild it instead
     buildAddCategoryPicker();
 
-    const dropdowns = [editCategory, filterCategory, subcategoryCategory];
+    const dropdowns = [editCategory, filterCategory, subcategoryCategory].filter(Boolean);
 
     dropdowns.forEach((dropdown, index) => {
         const isFilter = index === 1;
@@ -862,25 +890,136 @@ function updateSubcategories(category, selectElement) {
 }
 
 function renderCategoryList() {
-    categoryList.innerHTML = '';
+    if (!categoryList) return;
     const defaultCategoryNames = Object.keys(defaultCategories);
 
-    Object.entries(categories).forEach(([name, data]) => {
-        const isDefault = defaultCategoryNames.includes(name);
-        const safeName = name.replace(/'/g, "\\'");
-        const item = document.createElement('div');
-        item.className = `category-item ${isDefault ? 'default' : ''}`;
-        item.innerHTML = `
-            <span>${data.icon} ${name}</span>
-            <div class="item-actions">
-                <button class="btn-edit-category" title="Edit icon" ${isDefault ? 'disabled' : ''} onclick="openEditCategoryModal('${safeName}')">✏️</button>
-                <button class="btn-delete-category" ${isDefault ? 'disabled title="Cannot delete default category"' : ''} onclick="deleteCategory('${safeName}')">🗑️</button>
-            </div>
-        `;
-        categoryList.appendChild(item);
+    const incomeEntries  = Object.entries(categories).filter(([n]) => isIncomeCategory(n));
+    const expenseEntries = Object.entries(categories).filter(([n]) => !isIncomeCategory(n));
+
+    categoryList.innerHTML = '';
+    if (incomeEntries.length) {
+        categoryList.appendChild(buildCatGroup('Income',  '💰', incomeEntries,  defaultCategoryNames));
+    }
+    if (expenseEntries.length) {
+        categoryList.appendChild(buildCatGroup('Expense', '💸', expenseEntries, defaultCategoryNames));
+    }
+    bindCategoryListDelegation();
+}
+
+function buildCatGroup(label, icon, entries, defaultNames) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cat-group';
+    wrap.innerHTML = `
+        <div class="cat-group-header">
+            <span class="cat-group-icon">${icon}</span>
+            <span class="cat-group-label">${escapeHtmlSafe(label)}</span>
+            <span class="cat-group-count">${entries.length}</span>
+        </div>
+        <div class="cat-card-grid"></div>
+    `;
+    const grid = wrap.querySelector('.cat-card-grid');
+    entries.forEach(([name, data]) => grid.appendChild(buildCatCard(name, data, defaultNames)));
+    return wrap;
+}
+
+function buildCatCard(name, data, defaultNames) {
+    const isDefault = defaultNames.includes(name);
+    const defaultSubs = (defaultCategories[name]?.subcategories) || [];
+    const card = document.createElement('div');
+    card.className = 'cat-card' + (isDefault ? ' is-default' : '');
+    card.dataset.category = name;
+
+    const subChips = data.subcategories.map(sub => {
+        const isDefSub = defaultSubs.includes(sub);
+        const removable = !isDefSub;
+        return `
+            <span class="cat-sub-chip${isDefSub ? ' is-default' : ''}">
+                <span class="cat-sub-chip-label">${escapeHtmlSafe(sub)}</span>
+                ${removable
+                    ? `<button type="button" class="cat-sub-chip-x" data-action="del-sub" data-sub="${escapeAttrSafe(sub)}" title="Remove">×</button>`
+                    : ''}
+            </span>`;
+    }).join('') || `<span class="cat-sub-empty">No subcategories yet</span>`;
+
+    const delTitle = isDefault ? 'Default categories can\u2019t be deleted' : 'Delete category';
+    card.innerHTML = `
+        <div class="cat-card-head">
+            <span class="cat-card-icon">${data.icon || '📁'}</span>
+            <span class="cat-card-name">${escapeHtmlSafe(name)}</span>
+            ${isDefault ? '<span class="cat-card-badge">Default</span>' : ''}
+            <span class="cat-card-actions">
+                <button type="button" class="cat-card-btn" data-action="edit-cat" title="Change icon">✏️</button>
+                <button type="button" class="cat-card-btn danger" data-action="del-cat" title="${delTitle}" ${isDefault ? 'disabled' : ''}>🗑️</button>
+            </span>
+        </div>
+        <div class="cat-card-subs">${subChips}</div>
+        <form class="cat-card-add" data-action="add-sub" novalidate>
+            <input type="text" placeholder="+ Add subcategory" maxlength="30" autocomplete="off">
+            <button type="submit" class="cat-card-add-btn" title="Add">＋</button>
+        </form>
+    `;
+    return card;
+}
+
+function bindCategoryListDelegation() {
+    if (!categoryList || categoryList.__fxBound) return;
+    categoryList.__fxBound = true;
+
+    categoryList.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const card = btn.closest('[data-category]');
+        if (!card) return;
+        const cat = card.dataset.category;
+        const action = btn.dataset.action;
+        if (action === 'edit-cat') openEditCategoryModal(cat);
+        else if (action === 'del-cat') deleteCategory(cat);
+        else if (action === 'del-sub') deleteSubcategory(cat, btn.dataset.sub);
     });
 
-    renderSubcategoryList();
+    categoryList.addEventListener('submit', (e) => {
+        const form = e.target.closest('form[data-action="add-sub"]');
+        if (!form) return;
+        e.preventDefault();
+        const card = form.closest('[data-category]');
+        if (!card) return;
+        const input = form.querySelector('input');
+        const val = (input?.value || '').trim();
+        if (!val) return;
+        addSubcategoryInline(card.dataset.category, val);
+        if (input) input.value = '';
+        // Refocus the same input on the freshly rendered card so user can keep typing.
+        requestAnimationFrame(() => {
+            const newCard = categoryList.querySelector(`.cat-card[data-category="${cssAttrEscape(card.dataset.category)}"] .cat-card-add input`);
+            newCard?.focus();
+        });
+    });
+}
+
+function addSubcategoryInline(category, name) {
+    if (!categories[category]) return;
+    name = String(name).trim();
+    if (!name) return;
+    if (categories[category].subcategories.includes(name)) {
+        showToast('Subcategory already exists', 'warning');
+        return;
+    }
+    categories[category].subcategories.push(name);
+    saveCategories();
+    populateCategoryDropdowns();
+    renderCategoryList();
+    showToast(`Added "${name}"`, 'success');
+}
+
+function cssAttrEscape(s) {
+    return String(s).replace(/(["\\])/g, '\\$1');
+}
+function escapeHtmlSafe(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeAttrSafe(s) {
+    return escapeHtmlSafe(s).replace(/"/g, '&quot;');
 }
 
 function openEditCategoryModal(name) {
@@ -909,6 +1048,8 @@ function saveEditCategory() {
 }
 
 function renderSubcategoryList() {
+    // Legacy: standalone subcategory list is gone — chips render inline per card.
+    if (!subcategoryList || !subcategoryCategory) return;
     subcategoryList.innerHTML = '';
     const selectedCategory = subcategoryCategory.value;
 
@@ -974,6 +1115,7 @@ async function deleteCategory(name) {
 }
 
 async function addNewSubcategory() {
+    if (!subcategoryCategory || !newSubcategoryName) return;
     const category = subcategoryCategory.value;
     const name = newSubcategoryName.value.trim();
 
@@ -1670,46 +1812,34 @@ function renderExpenses() {
     renderRecentExpenses();
 }
 
+// Renders the dashboard "Recent Activity" table + mobile cards.
 function renderRecentExpenses() {
-    const recentTbody = document.getElementById('recent-expense-tbody');
-    const recentCardsContainer = document.getElementById('recent-expense-cards');
-    const recentEmptyState = document.getElementById('recent-empty-state');
-    const recentTable = document.getElementById('recent-expense-table');
-    
-    if (!recentTbody) return;
+    const tbody = document.getElementById('recent-expense-tbody');
+    const cards = document.getElementById('recent-expense-cards');
+    const empty = document.getElementById('recent-empty-state');
+    const table = document.getElementById('recent-expense-table');
+    if (!tbody) return;
 
-    recentTbody.innerHTML = '';
-    if (recentCardsContainer) recentCardsContainer.innerHTML = '';
+    tbody.innerHTML = '';
+    if (cards) cards.innerHTML = '';
 
-    // Sort all expenses by date descending and take top 10
-    const sorted = [...expenses].sort((a, b) => {
-        const dateA = (a.date || '').substring(0, 10);
-        const dateB = (b.date || '').substring(0, 10);
-        if (dateA < dateB) return 1;
-        if (dateA > dateB) return -1;
-        return (b.id || 0) - (a.id || 0); 
-    });
-    
-    const recent10 = sorted.slice(0, 10);
+    const recent = [...expenses]
+        .sort((a, b) => {
+            const d = (b.date || '').localeCompare(a.date || '');
+            if (d !== 0) return d;
+            return (b.timestamp || '').localeCompare(a.timestamp || '');
+        })
+        .slice(0, 10);
 
-    if (recent10.length === 0) {
-        if (recentEmptyState) recentEmptyState.classList.add('visible');
-        if (recentTable) recentTable.classList.add('table-empty');
-        if (recentCardsContainer) recentCardsContainer.classList.add('table-empty');
-    } else {
-        if (recentEmptyState) recentEmptyState.classList.remove('visible');
-        if (recentTable) recentTable.classList.remove('table-empty');
-        if (recentCardsContainer) recentCardsContainer.classList.remove('table-empty');
+    const isEmpty = recent.length === 0;
+    if (empty) empty.classList.toggle('visible', isEmpty);
+    if (table) table.classList.toggle('table-empty', isEmpty);
+    if (cards) cards.classList.toggle('table-empty', isEmpty);
+    if (isEmpty) return;
 
-        recent10.forEach(expense => {
-            const row = createExpenseRow(expense);
-            recentTbody.appendChild(row);
-
-            if (recentCardsContainer) {
-                const card = createExpenseCard(expense);
-                recentCardsContainer.appendChild(card);
-            }
-        });
+    for (const exp of recent) {
+        tbody.appendChild(createExpenseRow(exp));
+        if (cards) cards.appendChild(createExpenseCard(exp));
     }
 }
 
@@ -2173,54 +2303,56 @@ function parseCSVLine(line) {
 
 // ===== Statistics =====
 function updateStats() {
-    // Use local date instead of UTC to correctly match today's expenses
-    const today = getLocalDateString(new Date());
-    const currentMonth = today.substring(0, 7);
+    const todayEl  = document.getElementById('today-total');
+    const monthEl  = document.getElementById('month-total');
+    const totalEntriesEl = document.getElementById('total-entries');
+    const budgetStatusEl = document.getElementById('budget-status');
+    const budgetBarEl    = document.getElementById('budget-bar');
+    if (!todayEl) return;
 
-    // Calculate Today's Spending (only expenses)
-    const todayExpenses = expenses.filter(e => e.date.substring(0, 10) === today && (e.type === 'expense' || (e.type !== 'income' && e.category !== 'Income')));
-    const todaySum = todayExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
-    todayTotal.textContent = formatCurrency(todaySum);
+    const todayStr = getLocalDateString(new Date());
+    const monthStr = todayStr.substring(0, 7); // YYYY-MM
 
-    // Calculate This Month's Income & Expense
-    const monthTransactions = expenses.filter(e => e.date.substring(0, 7) === currentMonth);
-    
-    let monthIncome = 0;
+    let todaySpend = 0;
     let monthExpense = 0;
-    
-    monthTransactions.forEach(e => {
-        const isIncome = e.type === 'income' || e.category === 'Income';
-        if (isIncome) {
-            monthIncome += parseFloat(e.amount);
+    let monthIncome = 0;
+
+    for (const e of expenses) {
+        const amt = parseFloat(e.amount) || 0;
+        const inc = e.type === 'income' || (e.type !== 'expense' && e.category === 'Income');
+        const dateStr = (e.date || '').substring(0, 10);
+        if (dateStr === todayStr && !inc) todaySpend += amt;
+        if (dateStr.startsWith(monthStr)) {
+            if (inc) monthIncome += amt;
+            else monthExpense += amt;
+        }
+    }
+
+    todayEl.textContent  = formatCurrency(todaySpend);
+    monthEl.textContent  = formatCurrency(monthExpense);
+    if (totalEntriesEl) totalEntriesEl.textContent = String(expenses.length);
+
+    if (budgetStatusEl) {
+        if (monthIncome > 0) {
+            const remaining = monthIncome - monthExpense;
+            budgetStatusEl.textContent = formatCurrency(remaining);
         } else {
-            monthExpense += parseFloat(e.amount);
+            budgetStatusEl.textContent = 'Not Set';
         }
-    });
+    }
 
-    monthTotal.textContent = formatCurrency(monthExpense);
-
-    totalEntries.textContent = expenses.length;
-
-    // Budget -> Income Tracker Refactor
-    const remaining = monthIncome - monthExpense;
-    
-    budgetStatus.textContent = formatCurrency(remaining);
-    
-    // Only show warning based on Income percentage if monthIncome > 0
-    if (monthIncome > 0) {
-        const percentage = (monthExpense / monthIncome) * 100;
-        budgetBar.style.width = Math.min(percentage, 100) + '%';
-        budgetBar.classList.remove('warning', 'danger');
-
-        if (percentage >= 100) {
-            budgetBar.classList.add('danger');
-        } else if (percentage >= settings.warningThreshold) {
-            budgetBar.classList.add('warning');
+    if (budgetBarEl) {
+        budgetBarEl.classList.remove('warning', 'danger');
+        const threshold = settings.warningThreshold || 80;
+        if (monthIncome > 0) {
+            const pct = (monthExpense / monthIncome) * 100;
+            budgetBarEl.style.width = Math.min(pct, 100) + '%';
+            if (pct >= 100) budgetBarEl.classList.add('danger');
+            else if (pct >= threshold) budgetBarEl.classList.add('warning');
+        } else {
+            budgetBarEl.style.width = '0%';
+            if (monthExpense > 0) budgetBarEl.classList.add('danger');
         }
-    } else {
-        budgetBar.style.width = '0%';
-        budgetBar.classList.remove('warning', 'danger');
-        if (monthExpense > 0) budgetBar.classList.add('danger');
     }
 }
 
@@ -2286,16 +2418,20 @@ function normalizeDateString(dateStr) {
 
 function saveExpenses() {
     localStorage.setItem('expenses', JSON.stringify(expenses));
+    // Notify the new modular store (js/main.js). Safe no-op if not loaded yet.
+    window.__bridge && window.__bridge.notifyExpenses(expenses);
 }
 
 function saveCategories() {
     localStorage.setItem('categories', JSON.stringify(categories));
     storage.saveCategories(categories);
+    window.__bridge && window.__bridge.notifyCategories(categories);
 }
 
 function saveSettings() {
     localStorage.setItem('settings', JSON.stringify(settings));
     storage.saveSettings(settings);
+    window.__bridge && window.__bridge.notifySettings(settings);
 }
 
 // Make functions globally available
