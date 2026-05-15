@@ -1,4 +1,5 @@
-// ===== Google Sheets API client =====
+// js/services/sheets-api.js
+// Google Sheets API client.
 // Wraps fetch calls to Sheets v4 + Drive v3 to read/write the user's expense
 // spreadsheet. Uses the access token from window.auth.
 //
@@ -6,6 +7,8 @@
 //   Sheet "Expenses": header row [id, date, category, subcategory, amount,
 //                                 description, currency, timestamp, type]
 //   Sheet "Meta":     A=key, B=value(JSON). Rows: settings, categories.
+//
+// Also exposed on `window.sheetsApi` for any legacy callers.
 
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
@@ -336,4 +339,8 @@ const sheetsApi = {
     }
 };
 
-window.sheetsApi = sheetsApi;
+export { sheetsApi };
+
+if (typeof window !== 'undefined') {
+    /** @type {any} */ (window).sheetsApi = sheetsApi;
+}

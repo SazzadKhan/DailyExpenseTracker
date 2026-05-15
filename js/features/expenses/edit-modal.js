@@ -1,15 +1,39 @@
 // js/features/expenses/edit-modal.js
 //
-// Phase A3: owns the Edit Transaction modal (open / close / submit).
-// Dispatches the update through window.__bridge.actions.updateExpense.
-//
-// Legacy helpers still on window: showToast, updateSubcategories,
-// isIncomeCategory, updateStats, renderCharts, checkBudgetAlert.
+// Owns the Edit Transaction modal (open / close / submit + the
+// #edit-subcategory <select> sync when #edit-category changes).
+// Dispatches the update through ./actions.js.
 
 import { $ } from '../../core/dom.js';
 import { store } from '../../core/store.js';
+import { showToast } from '../../core/toast.js';
+import { update as updateExpenseAction } from './actions.js';
 
-function open(id) {
+const INCOME_CATEGORY_KEYS = ['Income'];
+function isIncomeCategory(name) {
+    return INCOME_CATEGORY_KEYS.includes(name);
+}
+
+/**
+ * Repopulate #edit-subcategory <select> with the subcategories of `category`.
+ * @param {string} category
+ * @param {HTMLSelectElement|null} sel
+ */
+function fillSubcategoryOptions(category, sel) {
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Select Subcategory</option>';
+    const cats = store.getState().categories || {};
+    if (category && cats[category]) {
+        for (const sub of cats[category].subcategories) {
+            const opt = document.createElement('option');
+            opt.value = sub;
+            opt.textContent = sub;
+            sel.appendChild(opt);
+        }
+    }
+}
+
+export function open(id) {
     const expenses = store.getState().expenses || [];
     const expense = expenses.find(e => String(e.id) === String(id));
     if (!expense) return;
@@ -26,7 +50,7 @@ function open(id) {
     editId.value = expense.id;
     editDate.value = expense.date;
     editCategory.value = expense.category;
-    /** @type {any} */ (window).updateSubcategories?.(expense.category, editSubcategory);
+    fillSubcategoryOptions(expense.category, editSubcategory);
     editSubcategory.value = expense.subcategory;
     editAmount.value = String(expense.amount);
     editDescription.value = expense.description || '';
@@ -34,7 +58,7 @@ function open(id) {
     modal.classList.add('active');
 }
 
-function close() {
+export function close() {
     const modal = $('#edit-modal');
     if (modal) modal.classList.remove('active');
 }
@@ -54,18 +78,12 @@ async function handleSubmit(e) {
         id, date, category, subcategory, amount, description,
         currency: /** @type {any} */ (settings).currency
     };
-    const isIncomeCategory = /** @type {any} */ (window).isIncomeCategory;
-    const bridge = /** @type {any} */ (window).__bridge;
-    const result = bridge?.actions?.updateExpense(input, { isIncomeCategory });
+    const result = updateExpenseAction(input, { isIncomeCategory });
     if (!result || !result.ok) {
-        /** @type {any} */ (window).showToast?.(result?.error || 'Could not save', 'warning');
+        showToast(result?.error || 'Could not save', 'warning');
         return;
     }
-    /** @type {any} */ (window).__setLegacyExpenses?.(result.list);
 
-    /** @type {any} */ (window).updateStats?.();
-    /** @type {any} */ (window).renderCharts?.();
-    /** @type {any} */ (window).checkBudgetAlert?.();
     close();
 }
 
@@ -81,7 +99,12 @@ export function mount() {
         if (e.target === modal) close();
     });
 
-    const bridge = /** @type {any} */ (window).__bridge || ((/** @type {any} */ (window).__bridge = {}));
-    bridge.openEditModal = open;
-    bridge.closeEditModal = close;
+    // Refill #edit-subcategory whenever the user changes #edit-category.
+    const editCategory = /** @type {HTMLSelectElement|null} */ ($('#edit-category'));
+    const editSubcategory = /** @type {HTMLSelectElement|null} */ ($('#edit-subcategory'));
+    if (editCategory) {
+        editCategory.addEventListener('change', () => {
+            fillSubcategoryOptions(editCategory.value, editSubcategory);
+        });
+    }
 }

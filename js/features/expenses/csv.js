@@ -5,19 +5,23 @@
 // the hidden #import-csv-input file picker.
 //
 // State: pulls expenses + settings from the store. Mutations go through
-// `window.__bridge.actions.setAll` (replace) or `addExpense` (merge), so
-// EXPENSES_CHANGED fires and list.js re-renders automatically.
+// ./actions.js (setAll for replace, add isn't used here — imported entries
+// already have ids), so EXPENSES_CHANGED fires and list.js re-renders.
 //
-// Cloud sync: setAll skips cloud by design; we call legacy
-// `window.pushAllToCloud()` after a replace/merge import if signed in.
+// Cloud sync: setAll skips cloud by design; we call pushAllToCloud() from
+// features/sync after a replace/merge import if signed in.
 
 import { store } from '../../core/store.js';
 import { log } from '../../core/log.js';
+import { dialog } from '../../services/dialog.js';
+import { storage } from '../../services/storage.js';
+import { showToast } from '../../core/toast.js';
+import { normalizeDateString } from '../../core/format.js';
+import { setAll as setAllExpenses } from './actions.js';
+import { pushAllToCloud } from '../sync/index.js';
+import { checkBudgetAlert } from '../budget/index.js';
 
 const $log = log('expenses/csv');
-
-function bridge() { return window.__bridge; }
-function core()   { return window.__core || {}; }
 
 function getExpenses() { return store.getState().expenses || []; }
 function getCurrency() { return store.getState().settings?.currency || 'USD'; }
@@ -26,7 +30,7 @@ function getCurrency() { return store.getState().settings?.currency || 'USD'; }
 export function exportToCSV() {
     const expenses = getExpenses();
     if (expenses.length === 0) {
-        window.showToast?.('No expenses to export', 'warning');
+        showToast('No expenses to export', 'warning');
         return;
     }
 
@@ -69,7 +73,6 @@ export function importFromCSV(file) {
     const reader = new FileReader();
 
     reader.onload = async function (e) {
-        const dialog = window.dialog;
         try {
             const content = e.target.result;
             const lines = content.split('\n').filter(line => line.trim());
@@ -94,7 +97,6 @@ export function importFromCSV(file) {
             }
 
             const defaultCurrency = getCurrency();
-            const normalizeDateString = core().normalizeDateString || ((s) => s);
             const newExpenses = [];
             const errors = [];
 
@@ -163,23 +165,20 @@ export function importFromCSV(file) {
                 nextList = newExpenses;
             }
 
-            bridge()?.actions?.setAllExpenses?.(nextList);
-            window.__setLegacyExpenses?.(nextList);
+            setAllExpenses(nextList);
 
-            if (window.storage?.isCloud?.()) {
-                try { window.pushAllToCloud?.(); }
+            if (storage.isCloud?.()) {
+                try { pushAllToCloud(); }
                 catch (err) { $log.warn('pushAllToCloud failed', err); }
             }
 
-            window.updateStats?.();
-            window.renderCharts?.();
-            window.checkBudgetAlert?.();
+            checkBudgetAlert();
 
-            window.showToast?.(`Imported ${newExpenses.length} entries`, 'success');
+            showToast(`Imported ${newExpenses.length} entries`, 'success');
 
         } catch (error) {
             $log.error('CSV import error', error);
-            await window.dialog?.alert?.({ title: 'Import failed', message: 'Failed to parse CSV file. Please check the format.', tone: 'error' });
+            await dialog.alert({ title: 'Import failed', message: 'Failed to parse CSV file. Please check the format.', tone: 'error' });
         }
     };
 
@@ -226,10 +225,6 @@ export function mount() {
             e.target.value = '';
         }
     });
-
-    const b = (window.__bridge = window.__bridge || {});
-    b.exportCSV = exportToCSV;
-    b.importCSV = importFromCSV;
 
     $log.info('mounted');
 }

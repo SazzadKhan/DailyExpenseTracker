@@ -21,18 +21,21 @@ There is **no build step**. Edit files, refresh the browser.
 
 ## Codebase status
 
-The repo is in the middle of a refactor from a monolithic [app.js](app.js)
-(~92 KB) into ES modules under [js/](js). Until the refactor is finished:
+The monolithic `app.js` has been fully drained into ES modules under
+[js/](js). All legacy classic scripts (`app.js`, `auth.js`, `sheets-api.js`,
+`storage.js`, `dialog.js`, `effects.js`) have been migrated to ES modules
+under [js/services/](js/services) and [js/features/](js/features). The
+`<script type="module" src="js/main.js">` is the only script tag for app
+code in [index.html](index.html).
 
-- **Old code:** [app.js](app.js), [auth.js](auth.js), [storage.js](storage.js),
-  [sheets-api.js](sheets-api.js), [effects.js](effects.js). Loaded via classic
-  `<script>` in [index.html](index.html). Uses globals on `window`.
-- **New code:** [js/core/](js/core), [js/services/](js/services),
-  [js/features/](js/features). ES modules, loaded via
-  `<script type="module" src="js/main.js">`.
+- **All code is ES modules** (`import` / `export`).
+- A handful of services still mirror themselves on `window.*` for cross-
+  module convenience (`window.auth`, `window.sheetsApi`, `window.storage`,
+  `window.dialog`, `window.fx`). New code should import these directly
+  rather than reaching through `window`.
 
-See [docs/REFACTOR_ROADMAP.md](docs/REFACTOR_ROADMAP.md) for the migration plan
-and which features have moved.
+See [docs/REFACTOR_ROADMAP.md](docs/REFACTOR_ROADMAP.md) for the migration
+log.
 
 ## File map (target structure)
 
@@ -49,8 +52,9 @@ js/
     log.js              prefixed console logger
   services/
     auth.js             Google OAuth (window.auth)
-    storage.js          backend facade (window.storage)
     sheets-api.js       Google Sheets backend (window.sheetsApi)
+    storage.js          cloud-sync backend facade (window.storage)
+    dialog.js           in-app alert/confirm/prompt (window.dialog)
   features/
     expenses/           CRUD, table/card render, recent list
     categories/         category + subcategory CRUD, emoji picker
@@ -66,12 +70,15 @@ docs/
 
 ## Rules for editing
 
-1. **Never duplicate `app.js`.** If you need a feature that hasn't been
-   extracted yet, move the relevant block from `app.js` into the right
-   `js/features/<area>/` module, then delete it from `app.js`.
+1. **No more `app.js`.** It was deleted in phase 5l. New code lives in
+   `js/features/<area>/`. If you find a function that looks like it should
+   exist somewhere, search [js/](js) first.
 2. **All new code must be ES modules** (`import` / `export`). Do not add to
-   `window.*` globals. The three legacy services (`auth`, `storage`,
-   `sheetsApi`) are the only sanctioned globals and will be wrapped later.
+   `window.*` globals. The five legacy services (`auth`, `sheetsApi`,
+   `storage`, `dialog`, `fx`) still mirror themselves on `window` for
+   cross-service convenience but new code should `import` them from
+   `js/services/` (or `js/features/effects/`) instead of reaching through
+   `window`.
 3. **State changes go through the store.** Read with `store.getState()`,
    write with `store.update(patch)` or domain actions
    (e.g. `addExpense(exp)`). Never mutate `state.expenses` in place.
@@ -139,6 +146,6 @@ Summary:
 
 ## When in doubt
 
-Make the smallest possible change. If a function is in `app.js`, prefer
-moving it into the correct module **before** modifying it, so the diff
-shows up in the right place.
+Make the smallest possible change. If a function looks misplaced, move it
+into the correct module **before** modifying it, so the diff shows up in
+the right place.

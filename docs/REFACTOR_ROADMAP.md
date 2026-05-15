@@ -13,15 +13,24 @@ is added alongside it and feature blocks are moved over one at a time.
 | 3     | Extract **settings** (theme/currency) + category dropdowns | ✅ done |
 | 4     | Filters store-mirror + pure chart selectors        | ✅ done |
 | 5     | Extract design tokens into `css/tokens.css`        | ✅ done (partial) |
-| 6     | ESLint + Prettier + JSDoc typedefs + smoke test    | ⬜ todo |
+| 5b    | Extract **charts** rendering (daily/category/monthly + insights) | ✅ done |
+| 5c    | Extract **toast** (core) + reactive **budget alert** feature     | ✅ done |
+| 5d    | Drop duplicated constants from `app.js` (DEFAULT_CATEGORIES, CURRENCIES, EMOJI_LIST) | ✅ done |
+| 5e    | Extract **cloud sync** (pull/push + status pill + auto-pull) into `js/features/sync/` | ✅ done |
+| 5f    | Extract **delete-all** flow into `js/features/expenses/delete-all.js` | ✅ done |
+| 5g    | Extract **auth widget + landing + profile** into `js/features/auth/`  | ✅ done |
+| 5i    | Extract **settings budget form + tab switcher** into `js/features/settings/budget-form.js` | ✅ done |
+| 5j    | Extract **quick-add category/subcategory** into `js/features/categories/quick-add.js` | ✅ done |
+| 5k    | Extract **navigation + currency/theme change handlers** into `js/features/navigation/` and `js/features/settings/{currency,theme}.js` | ✅ done |
+| 5l    | **Delete `app.js`** — last init/setupEventListeners drained into edit-modal + main.js | ✅ done |
+| 6     | JSDoc typedefs + smoke test expansion (ESLint/Prettier deferred) | ✅ done |
 
 ## Phase 5 notes
 
-Only the `:root` + `[data-theme="..."]` blocks have been pulled into
-[../css/tokens.css](../css/tokens.css). The same rules still appear at the
-top of `styles.css`. Since both files define identical values, behavior is
-unchanged. Leaving the duplicate avoids a risky 71 KB rewrite; the
-`styles.css` copy can be deleted once a smoke test (Phase 6) is in place.
+The `:root` + `[data-theme="..."]` blocks live in
+[../css/tokens.css](../css/tokens.css), loaded **before** `styles.css` via
+`<link>` in [index.html](../index.html). The duplicate blocks at the top
+of `styles.css` were removed in the Phase 6 cleanup pass.
 
 Future component CSS belongs under `css/components/<component>.css`,
 imported via a `<link>` in `index.html`. Each feature module should own

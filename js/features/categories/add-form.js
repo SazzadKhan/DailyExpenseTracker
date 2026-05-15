@@ -7,6 +7,7 @@ import * as actions from './actions.js';
 import { store } from '../../core/store.js';
 import { EVENTS } from '../../core/events.js';
 import { toggleEmojiPicker, mountOutsideClickClose } from './emoji-picker.js';
+import { showToast } from '../../core/toast.js';
 import { log } from '../../core/log.js';
 
 const $log = log('categories/add-form');
@@ -15,7 +16,7 @@ let newNameInput, newIconBtn, newPickerEl, addBtn;
 let subCatSelect, subListEl, subNameInput, addSubBtn;
 let selectedNewIcon = '📁';
 
-function toast(msg, type = 'info') { window.showToast?.(msg, type); }
+function toast(msg, type = 'info') { showToast(msg, type); }
 
 function resetNewForm() {
     newNameInput.value = '';

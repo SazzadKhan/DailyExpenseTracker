@@ -8,6 +8,9 @@ import { EVENTS } from '../../core/events.js';
 import { DEFAULT_CATEGORIES } from '../../core/constants.js';
 import { isIncomeCategory } from './categories.model.js';
 import * as actions from './actions.js';
+import { open as openEditCategoryModal } from './edit-modal.js';
+import { dialog } from '../../services/dialog.js';
+import { showToast } from '../../core/toast.js';
 import { log } from '../../core/log.js';
 
 const $log = log('categories/list');
@@ -25,7 +28,7 @@ function cssAttrEscape(s) {
     return String(s).replace(/(["\\])/g, '\\$1');
 }
 
-function toast(msg, type = 'info') { window.showToast?.(msg, type); }
+function toast(msg, type = 'info') { showToast(msg, type); }
 
 function buildCard(name, data, defaultNames) {
     const isDefault = defaultNames.includes(name);
@@ -104,9 +107,9 @@ function bindDelegation() {
         const action = btn.dataset.action;
 
         if (action === 'edit-cat') {
-            window.__bridge?.openEditCategoryModal?.(cat);
+            openEditCategoryModal(cat);
         } else if (action === 'del-cat') {
-            const ok = await window.dialog?.confirm?.({
+            const ok = await dialog.confirm({
                 title: `Delete “${cat}”?`,
                 message: 'Expenses in this category will keep their category label.',
                 confirmText: 'Delete',
@@ -146,9 +149,5 @@ export function mount() {
     if (!host) return;
     render();
     store.subscribe(EVENTS.CATEGORIES_CHANGED, render);
-    // Expose for legacy callers (settings-modal open path still calls
-    // window.__bridge.renderCategoryList()).
-    const b = (window.__bridge = window.__bridge || {});
-    b.renderCategoryList = render;
     $log.info('mounted');
 }

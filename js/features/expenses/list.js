@@ -1,20 +1,16 @@
 // js/features/expenses/list.js
 //
-// Phase A3: owns the History view's table + mobile cards, the filter inputs,
-// the sort state, the quick date-range chips, and the row-level delete action.
+// Owns the History view's table + mobile cards, the filter inputs, the sort
+// state, the quick date-range chips, and the row-level delete action.
 //
 // Reactive: subscribes to EXPENSES_CHANGED / CATEGORIES_CHANGED /
-// SETTINGS_CHANGED so any store mutation re-renders automatically. Filter
-// inputs are DOM-driven (same as legacy) and call render() directly.
-//
-// Legacy helpers consumed via window globals (move in later phases):
-//   window.isIncomeCategory, window.dialog, window.updateStats,
-//   window.renderCharts, window.checkBudgetAlert
+// SETTINGS_CHANGED so any store mutation re-renders automatically.
 
 import { $, $$ } from '../../core/dom.js';
 import { store } from '../../core/store.js';
 import { EVENTS } from '../../core/events.js';
 import { log } from '../../core/log.js';
+import { dialog } from '../../services/dialog.js';
 import {
     formatCurrency as fmtCurrency,
     formatDate as fmtDate,
@@ -22,17 +18,14 @@ import {
     debounce
 } from '../../core/format.js';
 import { sortBy } from './expenses.model.js';
+import { open as openEditModal } from './edit-modal.js';
+import { remove as removeExpense } from './actions.js';
 
 const $log = log('list');
 
 let currentSort = { column: 'date', direction: 'desc' };
 
 // ---------- helpers ----------------------------------------------------------
-
-const isIncome = (cat) => {
-    const fn = /** @type {any} */ (window).isIncomeCategory;
-    return typeof fn === 'function' ? fn(cat) : false;
-};
 
 const fc = (n) => fmtCurrency(n, store.getState().settings?.currency || 'USD');
 
@@ -98,7 +91,7 @@ function rowFor(expense) {
         </td>
     `;
     tr.querySelector('.btn-edit')?.addEventListener('click', () => {
-        /** @type {any} */ (window).__bridge?.openEditModal?.(expense.id);
+        openEditModal(expense.id);
     });
     tr.querySelector('.btn-delete')?.addEventListener('click', () => deleteExpense(expense.id));
     return tr;
@@ -133,7 +126,7 @@ function cardFor(expense) {
     `;
     card.querySelector('.btn-card-edit')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        /** @type {any} */ (window).__bridge?.openEditModal?.(expense.id);
+        openEditModal(expense.id);
     });
     card.querySelector('.btn-card-delete')?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -187,23 +180,14 @@ function render() {
 // ---------- delete -----------------------------------------------------------
 
 async function deleteExpense(id) {
-    const dialog = /** @type {any} */ (window).dialog;
-    if (!dialog) return;
     const ok = await dialog.confirm({
         title: 'Delete this entry?',
-        message: 'This can\u2019t be undone.',
+        message: 'This can’t be undone.',
         confirmText: 'Delete',
         tone: 'danger'
     });
     if (!ok) return;
-    const bridge = /** @type {any} */ (window).__bridge;
-    const next = bridge?.actions?.removeExpense(id);
-    /** @type {any} */ (window).__setLegacyExpenses?.(next);
-
-    // Legacy renderers (move in later phases).
-    /** @type {any} */ (window).updateStats?.();
-    /** @type {any} */ (window).renderCharts?.();
-    /** @type {any} */ (window).checkBudgetAlert?.();
+    removeExpense(id);
 }
 
 // ---------- quick filters + clear -------------------------------------------
@@ -289,9 +273,4 @@ export function mount() {
 
     // First paint after hydration.
     render();
-
-    // Expose for legacy app.js (currency-change re-render, cloud pull, etc.).
-    const bridge = /** @type {any} */ (window).__bridge || ((/** @type {any} */ (window).__bridge = {}));
-    bridge.renderExpenses = render;
-    bridge.deleteExpense = deleteExpense;
 }

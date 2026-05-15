@@ -1,11 +1,11 @@
 // js/features/categories/edit-modal.js
-// "Edit Category" modal: rename + change icon.
-// Opens via window.__bridge.openEditCategoryModal(name); save flows
-// through actions.renameCategory.
+// "Edit Category" modal: rename + change icon. Save flows through
+// actions.renameCategory.
 
 import * as actions from './actions.js';
 import { store } from '../../core/store.js';
 import { toggleEmojiPicker } from './emoji-picker.js';
+import { showToast } from '../../core/toast.js';
 import { log } from '../../core/log.js';
 
 const $log = log('categories/edit-modal');
@@ -14,7 +14,7 @@ let modal, nameInput, iconBtn, pickerEl, closeBtn, cancelBtn, saveBtn;
 let editingName = null;
 let selectedIcon = '📁';
 
-function open(name) {
+export function open(name) {
     const cats = store.getState().categories || {};
     if (!cats[name]) return;
     editingName = name;
@@ -25,7 +25,7 @@ function open(name) {
     modal.classList.add('active');
 }
 
-function close() {
+export function close() {
     modal.classList.remove('active');
     editingName = null;
     if (pickerEl) pickerEl.style.display = 'none';
@@ -35,9 +35,9 @@ function save() {
     if (!editingName) return;
     const newName = (nameInput?.value || '').trim();
     const r = actions.renameCategory(editingName, newName, selectedIcon);
-    if (!r.ok) { window.showToast?.(r.error, 'warning'); return; }
+    if (!r.ok) { showToast(r.error, 'warning'); return; }
     close();
-    window.showToast?.('Category updated', 'success');
+    showToast('Category updated', 'success');
 }
 
 export function mount() {
@@ -63,8 +63,5 @@ export function mount() {
         );
     });
 
-    const b = (window.__bridge = window.__bridge || {});
-    b.openEditCategoryModal = open;
-    b.closeEditCategoryModal = close;
     $log.info('mounted');
 }

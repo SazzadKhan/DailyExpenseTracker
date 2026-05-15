@@ -6,6 +6,8 @@
 import { store } from '../../core/store.js';
 import { EVENTS } from '../../core/events.js';
 import { saveCategories, saveExpenses } from '../../services/local-store.js';
+import { storage } from '../../services/storage.js';
+import { pushAllToCloud } from '../sync/index.js';
 import { log } from '../../core/log.js';
 
 const $log = log('categories/actions');
@@ -20,17 +22,14 @@ function commit(nextCats, nextExpenses) {
     store.update(patch, ...events);
     saveCategories(nextCats);
     if (nextExpenses) saveExpenses(nextExpenses);
-    try { window.storage?.saveCategories?.(nextCats); }
+    try { storage.saveCategories(nextCats); }
     catch (err) { $log.warn('cloud saveCategories failed', err); }
-    if (nextExpenses && window.storage?.isCloud?.()) {
+    if (nextExpenses && storage.isCloud?.()) {
         // Bulk-migrated expenses need a full push; per-row updateExpense calls
         // would be O(n) round-trips. The user is signed in, so this is fine.
-        try { window.pushAllToCloud?.(); }
+        try { pushAllToCloud(); }
         catch (err) { $log.warn('pushAllToCloud failed', err); }
     }
-    // Keep legacy `categories` / `expenses` globals in app.js in sync.
-    window.__setLegacyCategories?.(nextCats);
-    if (nextExpenses) window.__setLegacyExpenses?.(nextExpenses);
     return nextCats;
 }
 

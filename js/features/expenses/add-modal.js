@@ -1,23 +1,24 @@
 // js/features/expenses/add-modal.js
 //
-// Phase A2: owns the Add Transaction modal (smart picker + stage gating +
-// submit). Reads `categories` and `settings` from the store; dispatches
-// CRUD through `window.__bridge.actions.addExpense`.
-//
-// Legacy helpers still used (via window globals) until later phases move them:
-//   window.isIncomeCategory, window.showToast, window.saveCategories,
-//   window.populateCategoryDropdowns, window.renderExpenses,
-//   window.updateStats, window.renderCharts, window.checkBudgetAlert,
-//   window.dialog
+// Owns the Add Transaction modal (smart picker + stage gating + submit).
+// Reads `categories` and `settings` from the store; dispatches CRUD through
+// ./actions.js (add).
 //
 // Public surface:
-//   mount()  — wires DOM listeners, store subscriptions, and exposes
-//              window.__bridge.openAddModal for the legacy nav/header buttons.
+//   mount()                        wires DOM listeners and store subscriptions.
+//   open()                         opens the modal (used by navigation).
+//   buildCategoryPicker()          rebuild category grid (used by category CRUD).
+//   buildSubcategoryChips(name)    rebuild subcat chips for a category.
+//   selectCategory(name)           highlight a category (used by quick-add).
 
 import { $, $$ } from '../../core/dom.js';
 import { store } from '../../core/store.js';
 import { EVENTS } from '../../core/events.js';
 import { log } from '../../core/log.js';
+import { showToast } from '../../core/toast.js';
+import { add as addExpenseAction } from './actions.js';
+import { isIncomeCategory } from '../categories/categories.model.js';
+import { quickAddCategoryFromLog, quickAddSubcategoryFromLog } from '../categories/quick-add.js';
 
 const $log = log('add-modal');
 
@@ -29,14 +30,10 @@ function getCategories() {
     return store.getState().categories || {};
 }
 
-function isIncome(name) {
-    const fn = /** @type {any} */ (window).isIncomeCategory;
-    return typeof fn === 'function' ? fn(name) : false;
-}
+const isIncome = isIncomeCategory;
 
 function toast(msg, kind) {
-    const fn = /** @type {any} */ (window).showToast;
-    if (typeof fn === 'function') fn(msg, kind);
+    showToast(msg, kind);
 }
 
 function todayLocalIso() {
@@ -76,7 +73,7 @@ function refreshStage() {
 
 // ---------- pickers ----------------------------------------------------------
 
-function buildCategoryPicker() {
+export function buildCategoryPicker() {
     const grid = $('#expense-category-grid');
     if (!grid) return;
     grid.innerHTML = '';
@@ -127,12 +124,12 @@ function buildCategoryPicker() {
     // Quick-add still owned by legacy app.js (it mutates the `categories`
     // global directly + calls saveCategories). Moves in Phase B.
     addTile.addEventListener('click', () => {
-        /** @type {any} */ (window).quickAddCategoryFromLog?.();
+        quickAddCategoryFromLog();
     });
     grid.appendChild(addTile);
 }
 
-function selectCategory(name) {
+export function selectCategory(name) {
     const cat = /** @type {HTMLInputElement|null} */ ($('#expense-category'));
     const sub = /** @type {HTMLInputElement|null} */ ($('#expense-subcategory'));
     if (!cat || !sub) return;
@@ -150,7 +147,7 @@ function selectCategory(name) {
     setStage('subcategory');
 }
 
-function buildSubcategoryChips(category) {
+export function buildSubcategoryChips(category) {
     const wrap = $('#expense-subcategory-chips');
     const section = $('#subcategory-section');
     if (!wrap || !section) return;
@@ -191,14 +188,14 @@ function buildSubcategoryChips(category) {
     addChip.textContent = '＋ New';
     // Legacy app.js owns this until Phase B.
     addChip.addEventListener('click', () => {
-        /** @type {any} */ (window).quickAddSubcategoryFromLog?.(category);
+        quickAddSubcategoryFromLog(category);
     });
     wrap.appendChild(addChip);
 }
 
 // ---------- open + submit ----------------------------------------------------
 
-function open() {
+export function open() {
     const addModal = $('#add-modal');
     if (!addModal) return;
 
@@ -260,21 +257,14 @@ async function handleSubmit(e) {
         currency: /** @type {any} */ (settings).currency
     };
 
-    const bridge = /** @type {any} */ (window).__bridge;
-    const result = bridge?.actions?.addExpense(input, { isIncomeCategory: isIncome });
+    const result = addExpenseAction(input, { isIncomeCategory: isIncome });
     if (!result || !result.ok) {
         toast(result?.error || 'Could not save entry', 'warning');
         return;
     }
-    // Legacy app.js still owns its own `expenses` array; keep it in sync via
-    // the setter it exposes for the bridge.
-    /** @type {any} */ (window).__setLegacyExpenses?.(result.list);
 
-    // Legacy renderers (not yet subscribed). Phase A3 makes these reactive.
-    /** @type {any} */ (window).renderExpenses?.();
-    /** @type {any} */ (window).updateStats?.();
-    /** @type {any} */ (window).renderCharts?.();
-    /** @type {any} */ (window).checkBudgetAlert?.();
+    // Stats refresh + budget alert happen via store subscriptions
+    // (features/budget and renderAllCharts both subscribe to EXPENSES_CHANGED).
 
     amt.value = '';
     desc.value = '';
@@ -341,13 +331,4 @@ export function mount() {
     store.subscribe(EVENTS.CATEGORIES_CHANGED, () => {
         if ($('#add-modal')?.classList.contains('active')) buildCategoryPicker();
     });
-
-    // Expose for legacy app.js (nav button, header button,
-    // populateCategoryDropdowns, quickAdd* helpers that still live there
-    // and need to rebuild the picker / pick the freshly-added category).
-    const bridge = /** @type {any} */ (window).__bridge || ((/** @type {any} */ (window).__bridge = {}));
-    bridge.openAddModal = open;
-    bridge.rebuildAddCategoryPicker = buildCategoryPicker;
-    bridge.rebuildAddSubcategoryChips = buildSubcategoryChips;
-    bridge.selectAddCategory = selectCategory;
 }

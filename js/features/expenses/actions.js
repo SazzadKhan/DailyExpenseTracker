@@ -1,15 +1,15 @@
 // js/features/expenses/actions.js
 // Expense CRUD orchestration: validate → store update → local persist →
-// cloud sync (best-effort). Each action returns the NEW list so legacy
-// app.js can keep its `expenses` global in sync until the UI is migrated.
+// cloud sync (best-effort). Each action returns the NEW list.
 //
-// Cloud sync: uses the sanctioned `window.storage` global (see AGENTS.md).
+// Cloud sync: uses the storage facade from js/services/storage.js.
 // Failures are swallowed and logged — the local truth has already been
 // written, and the existing cloud layer handles its own retry/queue.
 
 import { store } from '../../core/store.js';
 import { EVENTS } from '../../core/events.js';
 import { saveExpenses } from '../../services/local-store.js';
+import { storage } from '../../services/storage.js';
 import { log } from '../../core/log.js';
 import {
     validateExpense,
@@ -46,7 +46,7 @@ export function add(input, opts = {}) {
     if (!v.ok) return v;
 
     const list = modelAdd(s.expenses, v.expense);
-    commit(list, () => window.storage?.addExpense?.(v.expense));
+    commit(list, () => storage.addExpense(v.expense));
     return { ok: true, expense: v.expense, list };
 }
 
@@ -65,7 +65,7 @@ export function update(input, opts = {}) {
     if (!v.ok) return v;
 
     const list = modelUpdate(s.expenses, v.expense);
-    commit(list, () => window.storage?.updateExpense?.(v.expense));
+    commit(list, () => storage.updateExpense(v.expense));
     return { ok: true, expense: v.expense, list };
 }
 
@@ -77,7 +77,7 @@ export function update(input, opts = {}) {
 export function remove(id) {
     const s = store.getState();
     const list = modelDelete(s.expenses, id);
-    commit(list, () => window.storage?.deleteExpense?.(String(id)));
+    commit(list, () => storage.deleteExpense(String(id)));
     return list;
 }
 
@@ -87,7 +87,7 @@ export function remove(id) {
  */
 export function removeAll() {
     const list = modelDeleteAll();
-    commit(list, () => window.storage?.deleteAll?.());
+    commit(list, () => storage.deleteAllExpenses());
     return list;
 }
 
