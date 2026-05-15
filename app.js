@@ -206,9 +206,8 @@ let selectedEditIcon = '📁';
 let currentEditingCategoryName = null;
 
 // Action buttons
-const exportCsvBtn = document.getElementById('export-csv');
-const importCsvBtn = document.getElementById('import-csv');
-const importCsvInput = document.getElementById('import-csv-input');
+// CSV buttons (#export-csv / #import-csv / #import-csv-input) are owned
+// by js/features/expenses/csv.js
 const deleteAllBtn = document.getElementById('delete-all');
 
 // Sort state
@@ -654,18 +653,8 @@ function setupEventListeners() {
     }
 
     // Export and Delete All
-
-    exportCsvBtn.addEventListener('click', exportToCSV);
+    // CSV export + import wiring lives in js/features/expenses/csv.js
     deleteAllBtn.addEventListener('click', handleDeleteAll);
-
-    // Import CSV
-    importCsvBtn.addEventListener('click', () => importCsvInput.click());
-    importCsvInput.addEventListener('change', (e) => {
-        if (e.target.files[0]) {
-            importFromCSV(e.target.files[0]);
-            e.target.value = ''; // Reset input for re-upload
-        }
-    });
 
     // Sync button (auth widget handles sign-in/out separately)
 
@@ -1736,203 +1725,8 @@ async function handleDeleteAll() {
     // any other input = cancel
 }
 
-// ===== Export to CSV =====
-function exportToCSV() {
-    if (expenses.length === 0) {
-        showToast('No expenses to export', 'warning');
-        return;
-    }
-
-    const headers = ['Date', 'Category', 'Subcategory', 'Amount', 'Currency', 'Description'];
-    const csvRows = [headers.join(',')];
-
-    expenses.forEach(e => {
-        const row = [
-            e.date,
-            `"${(e.category || '').replace(/"/g, '""')}"`,
-            `"${(e.subcategory || '').replace(/"/g, '""')}"`,
-            parseFloat(e.amount).toFixed(2),
-            e.currency || settings.currency,
-            `"${(e.description || '').replace(/"/g, '""')}"`
-        ];
-        csvRows.push(row.join(','));
-    });
-
-    const csvContent = csvRows.join('\r\n');
-    const filename = `expenses_${new Date().toISOString().split('T')[0]}.csv`;
-
-    // Use data URI approach for better filename support
-    const encodedContent = encodeURIComponent(csvContent);
-    const dataUri = 'data:text/csv;charset=utf-8,' + encodedContent;
-
-    const link = document.createElement('a');
-    link.setAttribute('href', dataUri);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    console.log(`Exported ${expenses.length} expenses to ${filename}`);
-}
-
-// ===== Import from CSV =====
-function importFromCSV(file) {
-    const reader = new FileReader();
-
-    reader.onload = async function (e) {
-        try {
-            const content = e.target.result;
-            const lines = content.split('\n').filter(line => line.trim());
-
-            if (lines.length < 2) {
-                await dialog.alert({ title: 'Import failed', message: 'CSV file is empty or has no data rows.', tone: 'error' });
-                return;
-            }
-
-            // Parse header to determine column positions
-            const header = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-
-            // Find column indices
-            const dateIdx = header.findIndex(h => h === 'date');
-            const categoryIdx = header.findIndex(h => h === 'category');
-            const subcategoryIdx = header.findIndex(h => h === 'subcategory');
-            const amountIdx = header.findIndex(h => h === 'amount');
-            const descriptionIdx = header.findIndex(h => h === 'description' || h === 'notes');
-            const currencyIdx = header.findIndex(h => h === 'currency');
-
-            // Validate required columns
-            if (dateIdx === -1 || categoryIdx === -1 || amountIdx === -1) {
-                await dialog.alert({ title: 'Import failed', message: 'CSV must have at least Date, Category, and Amount columns.', tone: 'error' });
-                return;
-            }
-
-            // Parse data rows
-            const newExpenses = [];
-            const errors = [];
-
-            for (let i = 1; i < lines.length; i++) {
-                const values = parseCSVLine(lines[i]);
-
-                if (values.length < 3) continue; // Skip empty/invalid rows
-
-                const date = values[dateIdx]?.trim();
-                const category = values[categoryIdx]?.trim();
-                const amount = parseFloat(values[amountIdx]?.trim().replace(/[^0-9.-]/g, ''));
-                const subcategory = subcategoryIdx !== -1 ? values[subcategoryIdx]?.trim() : 'Other';
-                const description = descriptionIdx !== -1 ? values[descriptionIdx]?.trim() : '';
-                const currency = currencyIdx !== -1 ? values[currencyIdx]?.trim() : settings.currency;
-
-                // Validate row
-                if (!date || !category || isNaN(amount)) {
-                    errors.push(`Row ${i + 1}: Invalid data`);
-                    continue;
-                }
-
-                // Validate and normalize date format
-                const formattedDate = normalizeDateString(date);
-                if (!formattedDate || !formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                    errors.push(`Row ${i + 1}: Invalid date format`);
-                    continue;
-                }
-
-                newExpenses.push({
-                    id: Date.now().toString() + '_' + i,
-                    date: formattedDate,
-                    category: category,
-                    subcategory: subcategory || 'Other',
-                    amount: amount,
-                    description: description,
-                    currency: currency
-                });
-            }
-
-            if (newExpenses.length === 0) {
-                await dialog.alert({
-                    title: 'Nothing to import',
-                    message: 'No valid expenses found in CSV file.' + (errors.length ? '\n\nErrors:\n' + errors.slice(0, 5).join('\n') : ''),
-                    tone: 'error'
-                });
-                return;
-            }
-
-            // Ask user what to do
-            const action = await dialog.confirm({
-                title: `Import ${newExpenses.length} entries?`,
-                message:
-                    (errors.length > 0 ? `${errors.length} rows had errors and were skipped.\n\n` : '') +
-                    `Choose “Add” to merge with existing entries, or “Replace” to overwrite everything.`,
-                confirmText: 'Add',
-                cancelText: 'Replace'
-            });
-
-            if (action) {
-                // Add to existing
-                expenses = [...expenses, ...newExpenses];
-            } else {
-                // Replace all
-                const confirmReplace = await dialog.confirm({
-                    title: 'Replace all entries?',
-                    message: 'This will DELETE all existing entries and replace them with the imported data.',
-                    confirmText: 'Replace',
-                    tone: 'danger'
-                });
-                if (confirmReplace) {
-                    expenses = newExpenses;
-                } else {
-                    return;
-                }
-            }
-
-            saveExpenses();
-            if (storage.isCloud()) {
-                pushAllToCloud();
-            }
-
-            window.__bridge?.renderExpenses?.();
-            updateStats();
-            renderCharts();
-            checkBudgetAlert();
-
-            showToast(`Imported ${newExpenses.length} entries`, 'success');
-
-        } catch (error) {
-            console.error('CSV import error:', error);
-            await dialog.alert({ title: 'Import failed', message: 'Failed to parse CSV file. Please check the format.', tone: 'error' });
-        }
-    };
-
-    reader.readAsText(file);
-}
-
-// Helper function to parse CSV line (handles quoted values)
-function parseCSVLine(line) {
-    const result = [];
-    let current = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-
-        if (char === '"') {
-            if (inQuotes && line[i + 1] === '"') {
-                current += '"';
-                i++; // Skip next quote
-            } else {
-                inQuotes = !inQuotes;
-            }
-        } else if (char === ',' && !inQuotes) {
-            result.push(current);
-            current = '';
-        } else {
-            current += char;
-        }
-    }
-
-    result.push(current); // Add last value
-    return result.map(v => v.replace(/^"|"$/g, '').trim());
-}
+// ===== CSV =====
+// Export, import, and parseCSVLine moved to js/features/expenses/csv.js.
 
 // ===== Statistics =====
 // Now owned by js/features/expenses/expenses.ui.js (renderStats).
