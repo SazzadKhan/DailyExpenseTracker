@@ -14,12 +14,31 @@ import { store } from './core/store.js';
 import { EVENTS } from './core/events.js';
 import { loadAll } from './services/local-store.js';
 import { log } from './core/log.js';
+import {
+    formatCurrency as fmtCurrency,
+    formatDate as fmtDate,
+    getLocalDateString as fmtLocalDate,
+    normalizeDateString as fmtNormalizeDate,
+    debounce as fmtDebounce
+} from './core/format.js';
 import { mount as mountExpenses } from './features/expenses/index.js';
 import { mount as mountSettings } from './features/settings/index.js';
 import { mount as mountCategories } from './features/categories/index.js';
 import { mount as mountFilters } from './features/filters/index.js';
 
 const $log = log('main');
+
+// Expose canonical core helpers to the legacy classic script (`app.js`).
+// `app.js` calls these via `window.__core.*` so there is exactly ONE
+// implementation of each formatter. This bridge goes away once `app.js`
+// is fully drained into modules.
+/** @type {any} */ (window).__core = {
+    formatCurrency: fmtCurrency,
+    formatDate: fmtDate,
+    getLocalDateString: fmtLocalDate,
+    normalizeDateString: fmtNormalizeDate,
+    debounce: fmtDebounce
+};
 
 function boot() {
     const persisted = loadAll();

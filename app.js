@@ -842,14 +842,17 @@ function updateCurrencyDisplay() {
 }
 
 function formatCurrency(amount) {
+    // Delegate to canonical core helper (see js/core/format.js).
+    // Fallback only triggers if the module hasn't loaded yet (very early boot).
+    const c = window.__core;
+    if (c && c.formatCurrency) return c.formatCurrency(amount, settings.currency);
     const currency = currencies[settings.currency];
     try {
         return new Intl.NumberFormat(currency.locale, {
-            style: 'currency',
-            currency: currency.code
+            style: 'currency', currency: currency.code
         }).format(amount);
     } catch (e) {
-        return `${currency.symbol}${amount.toFixed(2)}`;
+        return `${currency.symbol}${Number(amount).toFixed(2)}`;
     }
 }
 
@@ -2540,40 +2543,34 @@ function parseCSVLine(line) {
 function updateStats() { /* moved: js/features/expenses */ }
 
 // ===== Utility Functions =====
+// All formatters delegate to js/core/format.js (exposed via window.__core).
+// Wrappers stay only until call sites are migrated into ES modules.
 function formatDate(dateString) {
-    // Manually parse YYYY-MM-DD to avoid UTC interpretation that shifts dates
-    const parts = dateString.match(/(\d{4})-(\d{2})-(\d{2})/);
+    const c = window.__core;
+    if (c && c.formatDate) return c.formatDate(dateString);
+    const parts = dateString && dateString.match(/(\d{4})-(\d{2})-(\d{2})/);
     if (parts) {
         const date = new Date(parseInt(parts[1]), parseInt(parts[2]) - 1, parseInt(parts[3]));
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     }
-    // Fallback for non-standard formats
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function debounce(func, wait) {
+    const c = window.__core;
+    if (c && c.debounce) return c.debounce(func, wait);
     let timeout;
     return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
         clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+        timeout = setTimeout(() => func(...args), wait);
     };
 }
 
 // Get local date string in YYYY-MM-DD format (respects user's timezone)
 function getLocalDateString(date) {
+    const c = window.__core;
+    if (c && c.getLocalDateString) return c.getLocalDateString(date);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -2581,21 +2578,13 @@ function getLocalDateString(date) {
 }
 
 // Normalize a date string to YYYY-MM-DD format using local timezone
-// Handles various formats: YYYY-MM-DD, ISO datetime, locale strings, etc.
 function normalizeDateString(dateStr) {
+    const c = window.__core;
+    if (c && c.normalizeDateString) return c.normalizeDateString(dateStr);
     if (!dateStr) return dateStr;
-
-    // Already in YYYY-MM-DD format — return as-is
-    const isoMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (isoMatch) return dateStr;
-
-    // Fallback: parse and convert using local timezone
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr))) return dateStr;
     const parsed = new Date(dateStr);
-    if (!isNaN(parsed.getTime())) {
-        return getLocalDateString(parsed);
-    }
-
-    // Can't parse — return original
+    if (!isNaN(parsed.getTime())) return getLocalDateString(parsed);
     return dateStr;
 }
 

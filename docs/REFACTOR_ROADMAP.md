@@ -28,6 +28,28 @@ imported via a `<link>` in `index.html`. Each feature module should own
 its component file, e.g. `css/components/expenses.css` paired with
 `js/features/expenses/`.
 
+## CSS layout convention (decided 2026-05-15)
+
+Three tiers, in `<link>` order:
+
+1. **`css/tokens.css`** — CSS custom properties only. `:root` + theme blocks
+   (`[data-theme="..."]`). No selectors that paint pixels.
+2. **`css/base.css`** *(to be created at the start of Phase A)* — global
+   resets, typography, `body`, layout grid, `.app-container`, `.header`,
+   `.bottom-nav`, the bare `.modal` shell (positioning + backdrop only).
+   Anything that EVERY feature relies on.
+3. **`css/components/<area>.css`** — one file per feature folder under
+   `js/features/`. Owns ALL selectors that exist only because of that
+   feature: its modal innards, its tiles/chips, its tables, its animations.
+
+Rule of thumb: **if removing the feature would let you delete this CSS,
+it belongs in `components/`**. If it would still be needed (e.g. the
+modal backdrop), it belongs in `base.css`.
+
+The legacy `styles.css` shrinks every phase. At the end of Phase F it
+should contain nothing — at which point it gets deleted and replaced by
+the three tiers above.
+
 ## Migration recipe (per feature)
 
 When extracting a block from `app.js` into `js/features/<area>/`:
