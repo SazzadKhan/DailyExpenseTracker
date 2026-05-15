@@ -21,6 +21,7 @@ import {
     normalizeDateString as fmtNormalizeDate,
     debounce as fmtDebounce
 } from './core/format.js';
+import * as expensesActions from './features/expenses/actions.js';
 import { mount as mountExpenses } from './features/expenses/index.js';
 import { mount as mountSettings } from './features/settings/index.js';
 import { mount as mountCategories } from './features/categories/index.js';
@@ -62,6 +63,15 @@ function boot() {
         },
         notifySettings(s) {
             store.update({ settings: s || store.getState().settings }, EVENTS.SETTINGS_CHANGED);
+        },
+        // Phase A1: legacy `app.js` calls these to dispatch CRUD through the
+        // store + persist + cloud sync in one place. Each returns the new list.
+        actions: {
+            addExpense:    expensesActions.add,
+            updateExpense: expensesActions.update,
+            removeExpense: expensesActions.remove,
+            removeAllExpenses: expensesActions.removeAll,
+            setAllExpenses:    expensesActions.setAll
         }
     };
 

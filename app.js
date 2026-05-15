@@ -1916,7 +1916,7 @@ async function handleAddExpense(e) {
     // Derive transaction type from the selected category
     const transactionType = isIncomeCategory(selectedCategory) ? 'income' : 'expense';
 
-    const expense = {
+    const input = {
         id: Date.now().toString(),
         type: transactionType,
         date: expenseDate.value,
@@ -1927,9 +1927,14 @@ async function handleAddExpense(e) {
         currency: settings.currency
     };
 
-    expenses.push(expense);
-    saveExpenses();
-    storage.addExpense(expense);
+    // Phase A1: route through the modular action. It validates, updates the
+    // store, persists locally, and syncs to cloud in one place.
+    const result = window.__bridge.actions.addExpense(input, { isIncomeCategory });
+    if (!result.ok) {
+        showToast(result.error, 'warning');
+        return;
+    }
+    expenses = result.list;
 
     renderExpenses();
     updateStats();
@@ -2209,28 +2214,28 @@ async function handleEditExpense(e) {
     e.preventDefault();
 
     const id = editId.value;
-    const index = expenses.findIndex(e => String(e.id) === String(id));
+    const input = {
+        id,
+        date: editDate.value,
+        category: editCategory.value,
+        subcategory: editSubcategory.value,
+        amount: parseFloat(editAmount.value),
+        description: editDescription.value.trim(),
+        currency: settings.currency
+    };
 
-    if (index !== -1) {
-        expenses[index] = {
-            id: id,
-            date: editDate.value,
-            category: editCategory.value,
-            subcategory: editSubcategory.value,
-            amount: parseFloat(editAmount.value),
-            description: editDescription.value.trim(),
-            currency: settings.currency
-        };
-
-        saveExpenses();
-        storage.updateExpense(expenses[index]);
-
-        renderExpenses();
-        updateStats();
-        renderCharts();
-        checkBudgetAlert();
-        closeEditModal();
+    const result = window.__bridge.actions.updateExpense(input, { isIncomeCategory });
+    if (!result.ok) {
+        showToast(result.error, 'warning');
+        return;
     }
+    expenses = result.list;
+
+    renderExpenses();
+    updateStats();
+    renderCharts();
+    checkBudgetAlert();
+    closeEditModal();
 }
 
 // ===== Delete Expense =====
@@ -2242,9 +2247,7 @@ async function deleteExpense(id) {
         tone: 'danger'
     });
     if (!ok) return;
-    expenses = expenses.filter(e => String(e.id) !== String(id));
-    saveExpenses();
-    storage.deleteExpense(id);
+    expenses = window.__bridge.actions.removeExpense(id);
 
     renderExpenses();
     updateStats();
@@ -2267,8 +2270,7 @@ async function handleDeleteAll() {
             tone: 'danger'
         });
         if (!ok) return;
-        expenses = [];
-        saveExpenses();
+        expenses = window.__bridge.actions.setAllExpenses([]);
         renderExpenses();
         updateStats();
         renderCharts();
@@ -2298,8 +2300,7 @@ async function handleDeleteAll() {
             tone: 'danger'
         });
         if (!ok) return;
-        expenses = [];
-        saveExpenses();
+        expenses = window.__bridge.actions.setAllExpenses([]);
         try {
             updateSyncStatus('syncing');
             await storage.deleteAllExpenses();
@@ -2326,8 +2327,7 @@ async function handleDeleteAll() {
             tone: 'warn'
         });
         if (!ok) return;
-        expenses = [];
-        saveExpenses();
+        expenses = window.__bridge.actions.setAllExpenses([]);
         renderExpenses();
         updateStats();
         renderCharts();

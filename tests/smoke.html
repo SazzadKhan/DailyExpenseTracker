@@ -24,7 +24,8 @@
 
     <script type="module">
         import {
-            selectStats, selectRecent, isIncome, sortByDateDesc
+            selectStats, selectRecent, isIncome, sortByDateDesc,
+            validateExpense, addExpense, updateExpense, deleteExpense, sortBy
         } from '../js/features/expenses/expenses.model.js';
         import { applyFilters, emptyFilters }
             from '../js/features/filters/filters.model.js';
@@ -92,6 +93,60 @@
             const r = selectRecent(sample, 3);
             assertEq(r.length, 3);
             assertEq(r[r.length - 1].date <= r[0].date, true);
+        });
+
+        // ---- expenses.model CRUD ---------------------------------------------
+        const validInput = {
+            date: today, category: 'Food & Dining', subcategory: 'Groceries',
+            amount: 12.5, description: 'milk', currency: 'USD'
+        };
+        t('validateExpense rejects missing category', () => {
+            const r = validateExpense({ ...validInput, category: '' });
+            assertEq(r.ok, false);
+        });
+        t('validateExpense rejects non-positive amount', () => {
+            const r = validateExpense({ ...validInput, amount: 0 });
+            assertEq(r.ok, false);
+        });
+        t('validateExpense rejects bad date', () => {
+            const r = validateExpense({ ...validInput, date: '05/15/2026' });
+            assertEq(r.ok, false);
+        });
+        t('validateExpense produces expense type from non-income category', () => {
+            const r = validateExpense(validInput);
+            assert(r.ok);
+            assertEq(r.expense.type, 'expense');
+        });
+        t('validateExpense flags income from Income category', () => {
+            const r = validateExpense({ ...validInput, category: 'Income', subcategory: 'Salary' });
+            assert(r.ok);
+            assertEq(r.expense.type, 'income');
+        });
+        t('addExpense returns new array (no mutation)', () => {
+            const before = sample.slice();
+            const after = addExpense(before, { ...sample[0], id: '99' });
+            assertEq(after.length, sample.length + 1);
+            assertEq(before.length, sample.length);
+        });
+        t('updateExpense replaces by id and returns same ref if not found', () => {
+            const upd = { ...sample[0], description: 'changed' };
+            const out = updateExpense(sample, upd);
+            assertEq(out.find(e => e.id === '1').description, 'changed');
+            const missing = updateExpense(sample, { ...sample[0], id: 'nope' });
+            assertEq(missing, sample);
+        });
+        t('deleteExpense filters by id', () => {
+            const out = deleteExpense(sample, '1');
+            assertEq(out.length, sample.length - 1);
+            assert(!out.some(e => e.id === '1'));
+        });
+        t('sortBy amount ascending', () => {
+            const out = sortBy(sample, 'amount', 'asc');
+            assertEq(out[0].amount, 5);
+        });
+        t('sortBy date descending', () => {
+            const out = sortBy(sample, 'date', 'desc');
+            assertEq(out[out.length - 1].id, '5'); // oldest last
         });
 
         // ---- filters.model -----------------------------------------------------
