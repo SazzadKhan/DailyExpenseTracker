@@ -112,6 +112,14 @@ let settings = JSON.parse(localStorage.getItem('settings')) || {
     theme: 'dark'
 };
 
+// Bridge: modules in js/features/* dispatch CRUD via window.__bridge.actions.*
+// which returns the new list. Those modules call this setter so this legacy
+// `expenses` global stays in sync until renderExpenses / sortExpenses /
+// charts / stats are migrated away from it (Phase A3+).
+/** @type {any} */ (window).__setLegacyExpenses = (list) => {
+    expenses = Array.isArray(list) ? list : [];
+};
+
 // Sync status
 let isSyncing = false;
 let lastSyncTime = null;
@@ -546,45 +554,9 @@ function setupLanding() {
 
 // ===== Event Listeners =====
 function setupEventListeners() {
-    // Form submission
-    expenseForm.addEventListener('submit', handleAddExpense);
-
-    // Step-by-step stage gating: as the user types an amount, unlock the
-    // final step (note + Save) when the amount becomes a valid positive
-    // number, and re-lock if they clear it.
-    if (expenseAmount) {
-        expenseAmount.addEventListener('input', refreshAddStage);
-    }
-
-    // Smart Add-modal picker setup (type filter buttons)
-    document.querySelectorAll('.type-filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.type-filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentAddTypeFilter = btn.dataset.type;
-            buildAddCategoryPicker();
-        });
-    });
-
-    // Category view toggle (grid = icon only, list = icon + name)
-    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const view = btn.dataset.view;
-            try { localStorage.setItem('categoryPickerView', view); } catch (_) {}
-            const grid = document.getElementById('expense-category-grid');
-            if (grid) grid.dataset.view = view;
-            document.querySelectorAll('.view-toggle-btn').forEach(b => {
-                b.classList.toggle('active', b.dataset.view === view);
-            });
-        });
-    });
-
-    const addCancelBtn = document.getElementById('add-cancel');
-    if (addCancelBtn) {
-        addCancelBtn.addEventListener('click', () => {
-            document.getElementById('add-modal').classList.remove('active');
-        });
-    }
+    // Add-modal form submission, stage gating, type-filter buttons,
+    // view-toggle buttons, and cancel button are wired by
+    // js/features/expenses/add-modal.js mount().
 
     editCategory.addEventListener('change', () => {
         updateSubcategories(editCategory.value, editSubcategory);
@@ -780,7 +752,7 @@ function handleThemeChange() {
 
     if (headerAddBtn) {
         headerAddBtn.addEventListener('click', () => {
-            openAddModal();
+            window.__bridge?.openAddModal?.();
         });
     }
 
@@ -812,7 +784,7 @@ function handleThemeChange() {
 function handleNavigation(page) {
     // Handle special popup pages first
     if (page === 'add') {
-        openAddModal();
+        window.__bridge?.openAddModal?.();
         return;
     }
 
@@ -865,8 +837,10 @@ function isIncomeCategory(name) {
 }
 
 function populateCategoryDropdowns() {
-    // expenseCategory is now a hidden input driven by the visual picker — rebuild it instead
-    buildAddCategoryPicker();
+    // The Add-modal picker is owned by js/features/expenses/add-modal.js;
+    // it also re-renders on CATEGORIES_CHANGED, but call directly here for
+    // the legacy paths that mutate the global and don't yet notify.
+    window.__bridge?.rebuildAddCategoryPicker?.();
 
     const dropdowns = [editCategory, filterCategory, subcategoryCategory].filter(Boolean);
 
@@ -1640,215 +1614,11 @@ function generateColors(count) {
 }
 
 // ===== Smart Add-Modal Picker =====
-let currentAddTypeFilter = 'expense'; // 'expense' | 'income' | 'all'
-
-function openAddModal() {
-    const addModal = document.getElementById('add-modal');
-    if (!addModal) return;
-
-    // Reset form fields
-    if (expenseForm) expenseForm.reset();
-    expenseCategory.value = '';
-    expenseSubcategory.value = '';
-
-    // Default date = today (local)
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    expenseDate.value = `${yyyy}-${mm}-${dd}`;
-
-    // Reset selected labels
-    const catSel = document.getElementById('picker-category-selected');
-    const subSel = document.getElementById('picker-subcategory-selected');
-    if (catSel) catSel.textContent = 'Pick one';
-    if (subSel) subSel.textContent = 'Pick one';
-
-    // Hide subcategory section until a category is chosen
-    const subSection = document.getElementById('subcategory-section');
-    if (subSection) subSection.style.display = 'none';
-    const subChips = document.getElementById('expense-subcategory-chips');
-    if (subChips) subChips.innerHTML = '';
-
-    // Reset type filter to expense by default
-    currentAddTypeFilter = 'expense';
-    document.querySelectorAll('.type-filter-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.type === currentAddTypeFilter);
-    });
-
-    buildAddCategoryPicker();
-    addModal.classList.add('active');
-
-    // Start in stage: category (everything else locked until a category is picked)
-    setAddStage('category');
-}
-
-/**
- * Step-by-step "smart form" stage machine for the Add Transaction modal.
- * Stages: 'category' -> 'subcategory' -> 'amount' -> 'note' (Save unlocked).
- * Each stage locks all later steps via [data-stage] on the form (see styles.css),
- * and pulses the next step that needs the user's attention.
- *
- * Note: this is purely UX gating — the existing `required` validation on
- * hidden inputs still guards the submit handler.
- */
-function setAddStage(stage) {
-    const form = document.getElementById('expense-form');
-    if (!form) return;
-    const order = ['category', 'subcategory', 'amount', 'note'];
-    if (!order.includes(stage)) stage = 'category';
-    form.dataset.stage = stage;
-
-    // Highlight the active step
-    form.querySelectorAll('[data-step]').forEach(el => {
-        el.classList.toggle('step-active', el.dataset.step === stage);
-    });
-
-    // Save button is only enabled when we have reached the final step
-    const saveBtn = document.getElementById('btn-add-transaction');
-    if (saveBtn) saveBtn.disabled = stage !== 'note';
-}
-
-// Re-evaluate the stage based on current form values (used by input listeners).
-function refreshAddStage() {
-    const cat = document.getElementById('expense-category');
-    const sub = document.getElementById('expense-subcategory');
-    const amt = document.getElementById('expense-amount');
-    if (!cat || !sub || !amt) return;
-    if (!cat.value) return setAddStage('category');
-    if (!sub.value) return setAddStage('subcategory');
-    const n = parseFloat(amt.value);
-    if (!Number.isFinite(n) || n <= 0) return setAddStage('amount');
-    setAddStage('note');
-}
-
-function buildAddCategoryPicker() {
-    const grid = document.getElementById('expense-category-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
-
-    // Apply persisted view mode (grid = icon only, list = icon + name)
-    const savedView = (() => {
-        try { return localStorage.getItem('categoryPickerView') || 'grid'; } catch (_) { return 'grid'; }
-    })();
-    grid.dataset.view = savedView;
-    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.view === savedView);
-    });
-
-    const entries = Object.entries(categories).filter(([name]) => {
-        if (currentAddTypeFilter === 'income') return isIncomeCategory(name);
-        if (currentAddTypeFilter === 'expense') return !isIncomeCategory(name);
-        return true;
-    });
-
-    if (entries.length === 0) {
-        grid.innerHTML = '<div class="picker-empty">No categories. Add some in Settings → Categories.</div>';
-        return;
-    }
-
-    entries.forEach(([name, data]) => {
-        const tile = document.createElement('button');
-        tile.type = 'button';
-        tile.className = 'category-tile';
-        if (isIncomeCategory(name)) tile.classList.add('is-income');
-        if (expenseCategory.value === name) tile.classList.add('selected');
-        tile.dataset.category = name;
-        tile.innerHTML = `
-            <span class="tile-icon">${data.icon}</span>
-            <span class="tile-name">${name}</span>
-        `;
-        tile.addEventListener('click', () => selectAddCategory(name));
-        grid.appendChild(tile);
-    });
-
-    // Quick-add tile at the end so users can create a new category without leaving the modal.
-    const addTile = document.createElement('button');
-    addTile.type = 'button';
-    addTile.className = 'category-tile category-tile-add';
-    addTile.innerHTML = `
-        <span class="tile-icon">＋</span>
-        <span class="tile-name">New</span>
-    `;
-    addTile.addEventListener('click', () => quickAddCategoryFromLog());
-    grid.appendChild(addTile);
-}
-
-function selectAddCategory(name) {
-    expenseCategory.value = name;
-
-    // Update tile selection visuals
-    document.querySelectorAll('#expense-category-grid .category-tile').forEach(t => {
-        t.classList.toggle('selected', t.dataset.category === name);
-    });
-
-    const data = categories[name];
-    const catSel = document.getElementById('picker-category-selected');
-    if (catSel && data) catSel.textContent = `${data.icon} ${name}`;
-
-    // Reset subcategory and rebuild chips
-    expenseSubcategory.value = '';
-    const subSel = document.getElementById('picker-subcategory-selected');
-    if (subSel) subSel.textContent = 'Pick one';
-    buildAddSubcategoryChips(name);
-
-    // Unlock the subcategory step
-    setAddStage('subcategory');
-}
-
-function buildAddSubcategoryChips(category) {
-    const wrap = document.getElementById('expense-subcategory-chips');
-    const section = document.getElementById('subcategory-section');
-    if (!wrap || !section) return;
-    wrap.innerHTML = '';
-
-    if (!category || !categories[category]) {
-        section.style.display = 'none';
-        return;
-    }
-
-    const subs = categories[category].subcategories || [];
-    if (subs.length === 0) {
-        // Still show the section so the user can add the first subcategory inline.
-        section.style.display = '';
-        const addChip = document.createElement('button');
-        addChip.type = 'button';
-        addChip.className = 'chip chip-add';
-        addChip.textContent = '＋ New';
-        addChip.addEventListener('click', () => quickAddSubcategoryFromLog(category));
-        wrap.appendChild(addChip);
-        return;
-    }
-
-    section.style.display = '';
-    subs.forEach(sub => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'chip';
-        chip.textContent = sub;
-        chip.dataset.sub = sub;
-        chip.addEventListener('click', () => {
-            expenseSubcategory.value = sub;
-            wrap.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
-            chip.classList.add('selected');
-            const subSel = document.getElementById('picker-subcategory-selected');
-            if (subSel) subSel.textContent = sub;
-            // Unlock the amount step and pull focus to it for fast entry
-            setAddStage('amount');
-            const amt = document.getElementById('expense-amount');
-            if (amt) setTimeout(() => amt.focus(), 50);
-        });
-        wrap.appendChild(chip);
-    });
-
-    // Quick-add chip at the end.
-    const addChip = document.createElement('button');
-    addChip.type = 'button';
-    addChip.className = 'chip chip-add';
-    addChip.textContent = '＋ New';
-    addChip.addEventListener('click', () => quickAddSubcategoryFromLog(category));
-    wrap.appendChild(addChip);
-}
+// The Add Transaction modal (open, stage gating, category/subcategory pickers,
+// type-filter, view-toggle, and submit) lives in
+// js/features/expenses/add-modal.js. The quickAdd* helpers below stay here
+// for now because they mutate the legacy `categories` global; they will move
+// in Phase B alongside the rest of category management.
 
 async function quickAddCategoryFromLog() {
     const name = await dialog.prompt({
@@ -1865,8 +1635,8 @@ async function quickAddCategoryFromLog() {
     categories[trimmed] = { icon: '📁', subcategories: [] };
     saveCategories();
     populateCategoryDropdowns();
-    buildAddCategoryPicker();
-    selectAddCategory(trimmed);
+    window.__bridge?.rebuildAddCategoryPicker?.();
+    window.__bridge?.selectAddCategory?.(trimmed);
     showToast(`Added “${trimmed}”`, 'success');
 }
 
@@ -1888,7 +1658,7 @@ async function quickAddSubcategoryFromLog(category) {
     categories[category].subcategories.push(trimmed);
     saveCategories();
     populateCategoryDropdowns();
-    buildAddSubcategoryChips(category);
+    window.__bridge?.rebuildAddSubcategoryChips?.(category);
     // Auto-select the new subcategory.
     expenseSubcategory.value = trimmed;
     document.querySelectorAll('#expense-subcategory-chips .chip').forEach(c => {
@@ -1896,63 +1666,6 @@ async function quickAddSubcategoryFromLog(category) {
     });
     const subSel = document.getElementById('picker-subcategory-selected');
     if (subSel) subSel.textContent = trimmed;
-}
-
-// ===== Add Transaction =====
-async function handleAddExpense(e) {
-    e.preventDefault();
-
-    // Validate picker selections (hidden inputs aren't enforced by the browser)
-    const selectedCategory = expenseCategory.value;
-    if (!selectedCategory) {
-        showToast('Please pick a category', 'warning');
-        return;
-    }
-    if (!expenseSubcategory.value) {
-        showToast('Please pick a subcategory', 'warning');
-        return;
-    }
-
-    // Derive transaction type from the selected category
-    const transactionType = isIncomeCategory(selectedCategory) ? 'income' : 'expense';
-
-    const input = {
-        id: Date.now().toString(),
-        type: transactionType,
-        date: expenseDate.value,
-        category: selectedCategory,
-        subcategory: expenseSubcategory.value,
-        amount: parseFloat(expenseAmount.value),
-        description: expenseDescription.value.trim(),
-        currency: settings.currency
-    };
-
-    // Phase A1: route through the modular action. It validates, updates the
-    // store, persists locally, and syncs to cloud in one place.
-    const result = window.__bridge.actions.addExpense(input, { isIncomeCategory });
-    if (!result.ok) {
-        showToast(result.error, 'warning');
-        return;
-    }
-    expenses = result.list;
-
-    renderExpenses();
-    updateStats();
-    renderCharts();
-    checkBudgetAlert();
-
-    // Reset form
-    expenseAmount.value = '';
-    expenseDescription.value = '';
-    expenseSubcategory.value = '';
-    
-    // Close modal and notify
-    const addModal = document.getElementById('add-modal');
-    if (addModal) addModal.classList.remove('active');
-    
-    // Optional: navigate to history or dashboard if we want, or just show toast
-    showToast('Entry logged successfully!', 'success');
-
 }
 
 // ===== Render Expenses =====

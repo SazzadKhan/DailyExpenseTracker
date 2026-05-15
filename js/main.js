@@ -23,6 +23,7 @@ import {
 } from './core/format.js';
 import * as expensesActions from './features/expenses/actions.js';
 import { mount as mountExpenses } from './features/expenses/index.js';
+import { mount as mountAddModal } from './features/expenses/add-modal.js';
 import { mount as mountSettings } from './features/settings/index.js';
 import { mount as mountCategories } from './features/categories/index.js';
 import { mount as mountFilters } from './features/filters/index.js';
@@ -76,6 +77,7 @@ function boot() {
     };
 
     mountExpenses();
+    mountAddModal();
     mountSettings();
     mountCategories();
     mountFilters();
