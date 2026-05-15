@@ -22,6 +22,7 @@ import {
     debounce as fmtDebounce
 } from './core/format.js';
 import * as expensesActions from './features/expenses/actions.js';
+import * as categoriesActions from './features/categories/actions.js';
 import { mount as mountExpenses } from './features/expenses/index.js';
 import { mount as mountAddModal } from './features/expenses/add-modal.js';
 import { mount as mountList } from './features/expenses/list.js';
@@ -75,7 +76,12 @@ function boot() {
             updateExpense: expensesActions.update,
             removeExpense: expensesActions.remove,
             removeAllExpenses: expensesActions.removeAll,
-            setAllExpenses:    expensesActions.setAll
+            setAllExpenses:    expensesActions.setAll,
+            addCategory:       categoriesActions.addCategory,
+            renameCategory:    categoriesActions.renameCategory,
+            deleteCategory:    categoriesActions.deleteCategory,
+            addSubcategory:    categoriesActions.addSubcategory,
+            deleteSubcategory: categoriesActions.deleteSubcategory
         }
     };
 

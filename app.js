@@ -45,43 +45,9 @@ const EMOJI_LIST = [
     '🎁', '🎀', '🪙', '⚡', '🔔', '🏆', '🥇', '🎖️', '🛡️', '🔖', '📋', '❓', '💬', '🔄', '♻️'
 ];
 
-// ===== Emoji Picker Builder =====
-function buildEmojiPicker(containerEl, displayBtn, getSelected, setSelected) {
-    containerEl.innerHTML = '';
-    const currentSelected = getSelected();
-    EMOJI_LIST.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'emoji-btn' + (emoji === currentSelected ? ' selected' : '');
-        btn.textContent = emoji;
-        btn.title = emoji;
-        btn.addEventListener('click', () => {
-            setSelected(emoji);
-            displayBtn.textContent = emoji;
-            containerEl.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            containerEl.style.display = 'none';
-        });
-        containerEl.appendChild(btn);
-    });
-}
-
-function toggleEmojiPicker(containerEl, displayBtn, getSelected, setSelected) {
-    if (containerEl.style.display === 'none' || containerEl.style.display === '') {
-        buildEmojiPicker(containerEl, displayBtn, getSelected, setSelected);
-        containerEl.style.display = 'grid';
-    } else {
-        containerEl.style.display = 'none';
-    }
-}
-
-// Close emoji pickers when clicking outside
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.emoji-picker-wrapper') && !e.target.closest('.emoji-picker-grid')) {
-        if (newEmojiPickerEl) newEmojiPickerEl.style.display = 'none';
-        if (editEmojiPickerEl) editEmojiPickerEl.style.display = 'none';
-    }
-});
+// ===== Emoji Picker =====
+// Moved to js/features/categories/emoji-picker.js (buildEmojiPicker,
+// toggleEmojiPicker, outside-click handler).
 
 // Currency configurations
 const currencies = {
@@ -118,6 +84,12 @@ let settings = JSON.parse(localStorage.getItem('settings')) || {
 // charts / stats are migrated away from it (Phase A3+).
 /** @type {any} */ (window).__setLegacyExpenses = (list) => {
     expenses = Array.isArray(list) ? list : [];
+};
+
+// Same bridge for categories — js/features/categories/actions.js calls this
+// after every mutation so the legacy `categories` global stays in sync.
+/** @type {any} */ (window).__setLegacyCategories = (cats) => {
+    categories = cats || {};
 };
 
 // Sync status
@@ -182,28 +154,8 @@ const enableNotificationsInput = document.getElementById('enable-notifications')
 const saveBudgetBtn = document.getElementById('save-budget');
 
 // Category management elements
-const categoryList = document.getElementById('category-list');
-const newCategoryName = document.getElementById('new-category-name');
-const newCategoryIconBtn = document.getElementById('new-category-icon-btn');
-const newEmojiPickerEl = document.getElementById('new-emoji-picker');
-const addCategoryBtn = document.getElementById('add-category');
-const subcategoryCategory = document.getElementById('subcategory-category');
-const subcategoryList = document.getElementById('subcategory-list');
-const newSubcategoryName = document.getElementById('new-subcategory-name');
-const addSubcategoryBtn = document.getElementById('add-subcategory');
-// Edit Category Modal
-const editCategoryModal = document.getElementById('edit-category-modal');
-const editCategoryClose = document.getElementById('edit-category-close');
-const editCategoryCancel = document.getElementById('edit-category-cancel');
-const editCategorySave = document.getElementById('edit-category-save');
-const editCategoryNameInput = document.getElementById('edit-category-name');
-const editCategoryIconBtn = document.getElementById('edit-category-icon-btn');
-const editEmojiPickerEl = document.getElementById('edit-emoji-picker');
-
-// Picker state
-let selectedNewIcon = '📁';
-let selectedEditIcon = '📁';
-let currentEditingCategoryName = null;
+// Category list, add-category form, add-subcategory form, edit-category
+// modal and emoji picker state are owned by js/features/categories/*.
 
 // Action buttons
 // CSV buttons (#export-csv / #import-csv / #import-csv-input) are owned
@@ -592,41 +544,9 @@ function setupEventListeners() {
     // Save Budget
     saveBudgetBtn.addEventListener('click', saveBudgetSettings);
 
-    // Category Management
-    if (addCategoryBtn) addCategoryBtn.addEventListener('click', addNewCategory);
-    if (subcategoryCategory) subcategoryCategory.addEventListener('change', renderSubcategoryList);
-    if (addSubcategoryBtn) addSubcategoryBtn.addEventListener('click', addNewSubcategory);
-
-    // Enter key in the "Add Category" name input
-    if (newCategoryName) {
-        newCategoryName.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); addNewCategory(); }
-        });
-    }
-
-    // New-category emoji picker toggle
-    newCategoryIconBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleEmojiPicker(newEmojiPickerEl, newCategoryIconBtn,
-            () => selectedNewIcon,
-            (v) => { selectedNewIcon = v; }
-        );
-    });
-
-    // Edit-category modal controls
-    editCategoryClose.addEventListener('click', closeEditCategoryModal);
-    editCategoryCancel.addEventListener('click', closeEditCategoryModal);
-    editCategorySave.addEventListener('click', saveEditCategory);
-    editCategoryModal.addEventListener('click', (e) => {
-        if (e.target === editCategoryModal) closeEditCategoryModal();
-    });
-    editCategoryIconBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleEmojiPicker(editEmojiPickerEl, editCategoryIconBtn,
-            () => selectedEditIcon,
-            (v) => { selectedEditIcon = v; }
-        );
-    });
+    // Category Management, edit-category modal, emoji pickers, and
+    // add-category/add-subcategory forms are wired by
+    // js/features/categories/{add-form,edit-modal,emoji-picker}.js.
 
     // Alert close
     alertClose.addEventListener('click', () => {
@@ -805,60 +725,12 @@ function isIncomeCategory(name) {
 }
 
 function populateCategoryDropdowns() {
-    // The Add-modal picker is owned by js/features/expenses/add-modal.js;
-    // it also re-renders on CATEGORIES_CHANGED, but call directly here for
-    // the legacy paths that mutate the global and don't yet notify.
+    // No-op: js/features/categories/dropdowns.js subscribes to
+    // CATEGORIES_CHANGED and rebuilds #edit-category, #filter-category,
+    // #subcategory-category; js/features/expenses/add-modal.js owns the
+    // add-modal picker (also reactive). This stub stays so legacy
+    // callsites (init, pullFromCloud, wipeLocalData) still compile.
     window.__bridge?.rebuildAddCategoryPicker?.();
-
-    const dropdowns = [editCategory, filterCategory, subcategoryCategory].filter(Boolean);
-
-    dropdowns.forEach((dropdown, index) => {
-        const isFilter = index === 1;
-        dropdown.innerHTML = isFilter
-            ? '<option value="">All Categories</option>'
-            : '<option value="">Select Category</option>';
-
-        // Split into Income and Expense groups
-        const incomeEntries = Object.entries(categories).filter(([name]) => isIncomeCategory(name));
-        const expenseEntries = Object.entries(categories).filter(([name]) => !isIncomeCategory(name));
-
-        // For the add/edit form dropdowns, use optgroups with separators
-        if (!isFilter) {
-            // ── Income ── group
-            if (incomeEntries.length > 0) {
-                const incomeGroup = document.createElement('optgroup');
-                incomeGroup.label = '── Income ──';
-                incomeEntries.forEach(([name, data]) => {
-                    const opt = document.createElement('option');
-                    opt.value = name;
-                    opt.textContent = `${data.icon} ${name}`;
-                    incomeGroup.appendChild(opt);
-                });
-                dropdown.appendChild(incomeGroup);
-            }
-
-            // ── Expenses ── group
-            if (expenseEntries.length > 0) {
-                const expenseGroup = document.createElement('optgroup');
-                expenseGroup.label = '── Expenses ──';
-                expenseEntries.forEach(([name, data]) => {
-                    const opt = document.createElement('option');
-                    opt.value = name;
-                    opt.textContent = `${data.icon} ${name}`;
-                    expenseGroup.appendChild(opt);
-                });
-                dropdown.appendChild(expenseGroup);
-            }
-        } else {
-            // For filter dropdown, flat list is fine
-            Object.entries(categories).forEach(([name, data]) => {
-                const option = document.createElement('option');
-                option.value = name;
-                option.textContent = `${data.icon} ${name}`;
-                dropdown.appendChild(option);
-            });
-        }
-    });
 }
 
 function updateSubcategories(category, selectElement) {
@@ -874,286 +746,14 @@ function updateSubcategories(category, selectElement) {
     }
 }
 
-function renderCategoryList() {
-    if (!categoryList) return;
-    const defaultCategoryNames = Object.keys(defaultCategories);
+// ===== Category list, modals, and CRUD =====
+// Moved to js/features/categories/{list,edit-modal,add-form,actions}.js.
+// Reactive: every category mutation re-renders the list automatically.
 
-    const incomeEntries  = Object.entries(categories).filter(([n]) => isIncomeCategory(n));
-    const expenseEntries = Object.entries(categories).filter(([n]) => !isIncomeCategory(n));
-
-    categoryList.innerHTML = '';
-    if (incomeEntries.length) {
-        categoryList.appendChild(buildCatGroup('Income',  '💰', incomeEntries,  defaultCategoryNames));
-    }
-    if (expenseEntries.length) {
-        categoryList.appendChild(buildCatGroup('Expense', '💸', expenseEntries, defaultCategoryNames));
-    }
-    bindCategoryListDelegation();
-}
-
-function buildCatGroup(label, icon, entries, defaultNames) {
-    const wrap = document.createElement('div');
-    wrap.className = 'cat-group';
-    wrap.innerHTML = `
-        <div class="cat-group-header">
-            <span class="cat-group-icon">${icon}</span>
-            <span class="cat-group-label">${escapeHtmlSafe(label)}</span>
-            <span class="cat-group-count">${entries.length}</span>
-        </div>
-        <div class="cat-card-grid"></div>
-    `;
-    const grid = wrap.querySelector('.cat-card-grid');
-    entries.forEach(([name, data]) => grid.appendChild(buildCatCard(name, data, defaultNames)));
-    return wrap;
-}
-
-function buildCatCard(name, data, defaultNames) {
-    const isDefault = defaultNames.includes(name);
-    const defaultSubs = (defaultCategories[name]?.subcategories) || [];
-    const card = document.createElement('div');
-    card.className = 'cat-card' + (isDefault ? ' is-default' : '');
-    card.dataset.category = name;
-
-    const subChips = data.subcategories.map(sub => {
-        const isDefSub = defaultSubs.includes(sub);
-        return `
-            <span class="cat-sub-chip${isDefSub ? ' is-default' : ''}">
-                <span class="cat-sub-chip-label">${escapeHtmlSafe(sub)}</span>
-                <button type="button" class="cat-sub-chip-x" data-action="del-sub" data-sub="${escapeAttrSafe(sub)}" title="Remove">×</button>
-            </span>`;
-    }).join('') || `<span class="cat-sub-empty">No subcategories yet</span>`;
-
-    card.innerHTML = `
-        <div class="cat-card-head">
-            <span class="cat-card-icon">${data.icon || '📁'}</span>
-            <span class="cat-card-name">${escapeHtmlSafe(name)}</span>
-            ${isDefault ? '<span class="cat-card-badge">Default</span>' : ''}
-            <span class="cat-card-actions">
-                <button type="button" class="cat-card-btn" data-action="edit-cat" title="Edit name & icon">✏️</button>
-                <button type="button" class="cat-card-btn danger" data-action="del-cat" title="Delete category">🗑️</button>
-            </span>
-        </div>
-        <div class="cat-card-subs">${subChips}</div>
-        <form class="cat-card-add" data-action="add-sub" novalidate>
-            <input type="text" placeholder="+ Add subcategory" maxlength="30" autocomplete="off">
-            <button type="submit" class="cat-card-add-btn" title="Add">＋</button>
-        </form>
-    `;
-    return card;
-}
-
-function bindCategoryListDelegation() {
-    if (!categoryList || categoryList.__fxBound) return;
-    categoryList.__fxBound = true;
-
-    categoryList.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-action]');
-        if (!btn) return;
-        const card = btn.closest('[data-category]');
-        if (!card) return;
-        const cat = card.dataset.category;
-        const action = btn.dataset.action;
-        if (action === 'edit-cat') openEditCategoryModal(cat);
-        else if (action === 'del-cat') deleteCategory(cat);
-        else if (action === 'del-sub') deleteSubcategory(cat, btn.dataset.sub);
-    });
-
-    categoryList.addEventListener('submit', (e) => {
-        const form = e.target.closest('form[data-action="add-sub"]');
-        if (!form) return;
-        e.preventDefault();
-        const card = form.closest('[data-category]');
-        if (!card) return;
-        const input = form.querySelector('input');
-        const val = (input?.value || '').trim();
-        if (!val) return;
-        addSubcategoryInline(card.dataset.category, val);
-        if (input) input.value = '';
-        // Refocus the same input on the freshly rendered card so user can keep typing.
-        requestAnimationFrame(() => {
-            const newCard = categoryList.querySelector(`.cat-card[data-category="${cssAttrEscape(card.dataset.category)}"] .cat-card-add input`);
-            newCard?.focus();
-        });
-    });
-}
-
-function addSubcategoryInline(category, name) {
-    if (!categories[category]) return;
-    name = String(name).trim();
-    if (!name) return;
-    if (categories[category].subcategories.includes(name)) {
-        showToast('Subcategory already exists', 'warning');
-        return;
-    }
-    categories[category].subcategories.push(name);
-    saveCategories();
-    populateCategoryDropdowns();
-    renderCategoryList();
-    showToast(`Added "${name}"`, 'success');
-}
-
-function cssAttrEscape(s) {
-    return String(s).replace(/(["\\])/g, '\\$1');
-}
-function escapeHtmlSafe(s) {
-    return String(s ?? '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function escapeAttrSafe(s) {
-    return escapeHtmlSafe(s).replace(/"/g, '&quot;');
-}
-
-function openEditCategoryModal(name) {
-    currentEditingCategoryName = name;
-    selectedEditIcon = categories[name]?.icon || '📁';
-    editCategoryNameInput.value = name;
-    editCategoryIconBtn.textContent = selectedEditIcon;
-    editEmojiPickerEl.style.display = 'none';
-    editCategoryModal.classList.add('active');
-}
-
-function closeEditCategoryModal() {
-    editCategoryModal.classList.remove('active');
-    currentEditingCategoryName = null;
-    editEmojiPickerEl.style.display = 'none';
-}
-
-function saveEditCategory() {
-    const oldName = currentEditingCategoryName;
-    if (!oldName || !categories[oldName]) return;
-    const newName = (editCategoryNameInput?.value || '').trim();
-    if (!newName) { showToast('Name required', 'warning'); return; }
-    if (newName !== oldName && categories[newName]) {
-        showToast('That category already exists', 'warning'); return;
-    }
-    categories[oldName].icon = selectedEditIcon;
-    if (newName !== oldName) {
-        // Rebuild to preserve insertion order while renaming the key.
-        const rebuilt = {};
-        for (const [k, v] of Object.entries(categories)) {
-            rebuilt[k === oldName ? newName : k] = v;
-        }
-        categories = rebuilt;
-        // Migrate any existing expenses to the new category name.
-        let migrated = 0;
-        expenses.forEach(e => { if (e.category === oldName) { e.category = newName; migrated++; } });
-        if (migrated > 0) saveExpenses();
-    }
-    saveCategories();
-    populateCategoryDropdowns();
-    renderCategoryList();
-    // saveExpenses + saveCategories already notify the store → list re-renders.
-    updateStats();
-    closeEditCategoryModal();
-    showToast('Category updated', 'success');
-}
-
-function renderSubcategoryList() {
-    // Legacy: standalone subcategory list is gone — chips render inline per card.
-    if (!subcategoryList || !subcategoryCategory) return;
-    subcategoryList.innerHTML = '';
-    const selectedCategory = subcategoryCategory.value;
-
-    if (!selectedCategory || !categories[selectedCategory]) return;
-
-    const defaultSubs = defaultCategories[selectedCategory]?.subcategories || [];
-
-    categories[selectedCategory].subcategories.forEach(sub => {
-        const isDefault = defaultSubs.includes(sub);
-        const item = document.createElement('div');
-        item.className = 'subcategory-item';
-        item.innerHTML = `
-            <span>${sub}</span>
-            <button class="btn-delete-category" ${isDefault ? 'disabled' : ''} onclick="deleteSubcategory('${selectedCategory}', '${sub}')">🗑️</button>
-        `;
-        subcategoryList.appendChild(item);
-    });
-}
-
-async function addNewCategory() {
-    const name = newCategoryName.value.trim();
-    const icon = selectedNewIcon || '📁';
-
-    if (!name) {
-        showToast('Please enter a category name', 'warning');
-        return;
-    }
-
-    if (categories[name]) {
-        showToast('Category already exists', 'warning');
-        return;
-    }
-
-    categories[name] = {
-        icon: icon,
-        subcategories: ['Other']
-    };
-
-    saveCategories();
-    populateCategoryDropdowns();
-    renderCategoryList();
-
-    newCategoryName.value = '';
-    // Reset picker to default
-    selectedNewIcon = '📁';
-    newCategoryIconBtn.textContent = '📁';
-    newEmojiPickerEl.style.display = 'none';
-    showToast(`Category "${name}" added!`, 'success');
-}
-
-async function deleteCategory(name) {
-    const ok = await dialog.confirm({
-        title: `Delete “${name}”?`,
-        message: `Expenses in this category will keep their category label.`,
-        confirmText: 'Delete',
-        tone: 'danger'
-    });
-    if (!ok) return;
-    delete categories[name];
-    saveCategories();
-    populateCategoryDropdowns();
-    renderCategoryList();
-}
-
-async function addNewSubcategory() {
-    if (!subcategoryCategory || !newSubcategoryName) return;
-    const category = subcategoryCategory.value;
-    const name = newSubcategoryName.value.trim();
-
-    if (!category) {
-        showToast('Please select a category first', 'warning');
-        return;
-    }
-
-    if (!name) {
-        showToast('Please enter a subcategory name', 'warning');
-        return;
-    }
-
-    if (categories[category].subcategories.includes(name)) {
-        showToast('Subcategory already exists', 'warning');
-        return;
-    }
-
-    categories[category].subcategories.push(name);
-    saveCategories();
-    renderSubcategoryList();
-    populateCategoryDropdowns();
-
-    newSubcategoryName.value = '';
-}
-
-async function deleteSubcategory(category, subcategory) {
-    if (!categories[category]) return;
-    const index = categories[category].subcategories.indexOf(subcategory);
-    if (index > -1) {
-        categories[category].subcategories.splice(index, 1);
-        saveCategories();
-        populateCategoryDropdowns();
-        renderCategoryList();
-        renderSubcategoryList();
-    }
-}
+// Stubs preserved so legacy callsites (init, pullFromCloud, wipeLocalData)
+// compile. The module subscribes to CATEGORIES_CHANGED for re-render, so
+// these are no-ops once the modules mount.
+function renderCategoryList() { window.__bridge?.renderCategoryList?.(); }
 
 // ===== Settings Modal =====
 function openSettingsModal() {
@@ -1800,8 +1400,8 @@ function saveSettings() {
 // Make functions globally available
 window.openEditModal = (id) => window.__bridge?.openEditModal?.(id);
 window.deleteExpense = (id) => window.__bridge?.deleteExpense?.(id);
-window.deleteCategory = deleteCategory;
-window.deleteSubcategory = deleteSubcategory;
+window.deleteCategory = (name) => window.__bridge?.actions?.deleteCategory?.(name);
+window.deleteSubcategory = (cat, sub) => window.__bridge?.actions?.deleteSubcategory?.(cat, sub);
 
 // ===== Auth widget UI =====
 function setupAuthUi() {
