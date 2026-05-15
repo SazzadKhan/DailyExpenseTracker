@@ -24,6 +24,8 @@ import {
 import * as expensesActions from './features/expenses/actions.js';
 import { mount as mountExpenses } from './features/expenses/index.js';
 import { mount as mountAddModal } from './features/expenses/add-modal.js';
+import { mount as mountList } from './features/expenses/list.js';
+import { mount as mountEditModal } from './features/expenses/edit-modal.js';
 import { mount as mountSettings } from './features/settings/index.js';
 import { mount as mountCategories } from './features/categories/index.js';
 import { mount as mountFilters } from './features/filters/index.js';
@@ -78,6 +80,8 @@ function boot() {
 
     mountExpenses();
     mountAddModal();
+    mountList();
+    mountEditModal();
     mountSettings();
     mountCategories();
     mountFilters();

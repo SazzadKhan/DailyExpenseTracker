@@ -266,7 +266,7 @@ async function pullFromCloud() {
 
         // Refresh UI
         populateCategoryDropdowns();
-        renderExpenses();
+        window.__bridge?.renderExpenses?.();
         updateStats();
         renderCharts();
         loadSettingsForm();
@@ -350,7 +350,7 @@ async function init() {
     loadSettingsForm();
 
     // Render initial data from localStorage
-    renderExpenses();
+    window.__bridge?.renderExpenses?.();
     updateStats();
     renderCharts();
     renderCategoryList();
@@ -518,7 +518,7 @@ function wipeLocalData({ keepSettings = false } = {}) {
 
     // Re-render so the UI reflects the wipe immediately.
     if (typeof populateCategoryDropdowns === 'function') populateCategoryDropdowns();
-    if (typeof renderExpenses === 'function') renderExpenses();
+    window.__bridge?.renderExpenses?.();
     if (typeof updateStats === 'function') updateStats();
     if (typeof renderCharts === 'function') renderCharts();
     if (typeof loadSettingsForm === 'function' && !keepSettings) loadSettingsForm();
@@ -570,30 +570,9 @@ function setupEventListeners() {
         themeSelect.addEventListener('change', handleThemeChange);
     }
 
-    // Filter changes
-    filterDateFrom.addEventListener('change', renderExpenses);
-    filterDateTo.addEventListener('change', renderExpenses);
-    filterCategory.addEventListener('change', renderExpenses);
-    filterSearch.addEventListener('input', debounce(renderExpenses, 300));
-    clearFiltersBtn.addEventListener('click', clearFilters);
-
-    // Quick date-range filter chips (Today / 7d / 30d / This month / All)
-    document.querySelectorAll('.quick-filter-chip').forEach(chip => {
-        chip.addEventListener('click', () => applyQuickRange(chip.dataset.range));
-    });
-
-    // Sorting
-    document.querySelectorAll('.sortable').forEach(th => {
-        th.addEventListener('click', () => handleSort(th.dataset.sort));
-    });
-
-    // Edit Modal
-    modalClose.addEventListener('click', closeEditModal);
-    modalCancel.addEventListener('click', closeEditModal);
-    editForm.addEventListener('submit', handleEditExpense);
-    editModal.addEventListener('click', (e) => {
-        if (e.target === editModal) closeEditModal();
-    });
+    // Filter inputs, quick-range chips, sortable headers, edit modal
+    // (open/close/submit, backdrop, modalClose/modalCancel) are wired by
+    // js/features/expenses/list.js and js/features/expenses/edit-modal.js.
 
     // Settings Modal
     
@@ -693,7 +672,7 @@ function setupEventListeners() {
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            closeEditModal();
+            window.__bridge?.closeEditModal?.();
             closeSettingsModal();
         }
     });
@@ -709,7 +688,7 @@ function handleCurrencyChange() {
     settings.currency = currencySelect.value;
     saveSettings();
     updateCurrencyDisplay();
-    renderExpenses();
+    // saveSettings notifies SETTINGS_CHANGED → list.js re-renders.
     updateStats();
     renderCharts();
 }
@@ -767,8 +746,8 @@ function handleThemeChange() {
             const btn = e.target.closest('[data-action][data-id]');
             if (btn) {
                 const id = btn.dataset.id;
-                if (btn.dataset.action === 'edit') openEditModal(id);
-                else if (btn.dataset.action === 'delete') deleteExpense(id);
+                if (btn.dataset.action === 'edit') window.__bridge?.openEditModal?.(id);
+                else if (btn.dataset.action === 'delete') window.__bridge?.deleteExpense?.(id);
                 return;
             }
             // Tap-to-expand on mobile cards (matches legacy behavior)
@@ -1074,7 +1053,7 @@ function saveEditCategory() {
     saveCategories();
     populateCategoryDropdowns();
     renderCategoryList();
-    renderExpenses();
+    // saveExpenses + saveCategories already notify the store → list re-renders.
     updateStats();
     closeEditCategoryModal();
     showToast('Category updated', 'success');
@@ -1668,305 +1647,10 @@ async function quickAddSubcategoryFromLog(category) {
     if (subSel) subSel.textContent = trimmed;
 }
 
-// ===== Render Expenses =====
-function renderExpenses() {
-    let filtered = getFilteredExpenses();
-    filtered = sortExpenses(filtered);
-
-    expenseTbody.innerHTML = '';
-
-    // Also render mobile cards
-    const expenseCardsContainer = document.getElementById('expense-cards');
-    if (expenseCardsContainer) {
-        expenseCardsContainer.innerHTML = '';
-    }
-
-    if (filtered.length === 0) {
-        emptyState.classList.add('visible');
-        document.querySelector('.expense-table').classList.add('table-empty');
-        if (expenseCardsContainer) expenseCardsContainer.classList.add('table-empty');
-    } else {
-        emptyState.classList.remove('visible');
-        document.querySelector('.expense-table').classList.remove('table-empty');
-        if (expenseCardsContainer) expenseCardsContainer.classList.remove('table-empty');
-
-        filtered.forEach(expense => {
-            // Create table row for desktop
-            const row = createExpenseRow(expense);
-            expenseTbody.appendChild(row);
-
-            // Create card for mobile
-            if (expenseCardsContainer) {
-                const card = createExpenseCard(expense);
-                expenseCardsContainer.appendChild(card);
-            }
-        });
-    }
-
-    const total = filtered.reduce((sum, exp) => {
-        const isIncome = exp.type === 'income' || exp.category === 'Income';
-        return isIncome ? sum + parseFloat(exp.amount) : sum - parseFloat(exp.amount);
-    }, 0);
-    filteredTotal.textContent = formatCurrency(total);
-
-    renderRecentExpenses();
-}
-
-// Renders the dashboard "Recent Activity" table + mobile cards.
-// Now owned by js/features/expenses/expenses.ui.js (renderRecent).
-// This stub stays so legacy callers compile; the module subscribes to the
-// store and re-renders automatically whenever saveExpenses() fires the bridge.
+// ===== History list, filters, sort, edit modal, delete =====
+// All moved to js/features/expenses/list.js + edit-modal.js.
+// The dashboard "Recent Activity" stub stays so legacy callers compile.
 function renderRecentExpenses() { /* moved: js/features/expenses */ }
-
-function createExpenseRow(expense) {
-    const tr = document.createElement('tr');
-    const categoryData = categories[expense.category] || { icon: '📋' };
-    const isIncome = expense.type === 'income' || expense.category === 'Income';
-    const amountVal = parseFloat(expense.amount);
-    const amountDisplay = isIncome ? `+ ${formatCurrency(amountVal)}` : `- ${formatCurrency(amountVal)}`;
-    const amountClass = isIncome ? 'income-amount' : 'expense-amount';
-
-    tr.innerHTML = `
-        <td>${formatDate(expense.date)}</td>
-        <td><span class="category-badge" data-category="${expense.category}">${categoryData.icon} ${expense.category}</span></td>
-        <td class="subcategory-text">${expense.subcategory}</td>
-        <td class="${amountClass}">${amountDisplay}</td>
-        <td class="description-text" title="${expense.description || '-'}">${expense.description || '-'}</td>
-        <td class="action-buttons">
-            <button class="btn-edit">✏️ Edit</button>
-            <button class="btn-delete">🗑️ Delete</button>
-        </td>
-    `;
-
-    // Use addEventListener to avoid broken onclick when IDs contain special characters
-    tr.querySelector('.btn-edit').addEventListener('click', () => openEditModal(expense.id));
-    tr.querySelector('.btn-delete').addEventListener('click', () => deleteExpense(expense.id));
-
-    return tr;
-}
-
-function createExpenseCard(expense) {
-    const card = document.createElement('div');
-    card.className = 'expense-card';
-    card.dataset.id = expense.id;
-    const categoryData = categories[expense.category] || { icon: '📋' };
-
-    const isIncome = expense.type === 'income' || expense.category === 'Income';
-    const amountVal = parseFloat(expense.amount);
-    const amountDisplay = isIncome ? `+ ${formatCurrency(amountVal)}` : `- ${formatCurrency(amountVal)}`;
-    const amountClass = isIncome ? 'income-amount' : 'expense-amount';
-
-    card.innerHTML = `
-        <div class="expense-card-main" data-category="${expense.category}">
-            <div class="expense-card-left">
-                <span class="expense-card-icon">${categoryData.icon}</span>
-            </div>
-            <div class="expense-card-center">
-                <span class="expense-card-title">${expense.subcategory}</span>
-                <span class="expense-card-meta">${formatDate(expense.date)}${expense.description ? ' · ' + expense.description : ''}</span>
-            </div>
-            <span class="expense-card-amount ${amountClass}">${amountDisplay}</span>
-        </div>
-        <div class="expense-card-actions">
-            <button class="btn-card-edit">✏️ Edit</button>
-            <button class="btn-card-delete">🗑️ Delete</button>
-        </div>
-    `;
-
-    // Use addEventListener to avoid broken onclick when IDs contain special characters
-    card.querySelector('.btn-card-edit').addEventListener('click', (e) => {
-        e.stopPropagation();
-        openEditModal(expense.id);
-    });
-    card.querySelector('.btn-card-delete').addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteExpense(expense.id);
-    });
-
-    // Tap to select/deselect card
-    card.addEventListener('click', () => {
-        const wasActive = card.classList.contains('active');
-        // Deselect all other cards
-        document.querySelectorAll('.expense-card.active').forEach(c => c.classList.remove('active'));
-        // Toggle this card
-        if (!wasActive) {
-            card.classList.add('active');
-        }
-    });
-
-    return card;
-}
-
-// ===== Filtering =====
-function getFilteredExpenses() {
-    return expenses.filter(expense => {
-        if (filterDateFrom.value && expense.date < filterDateFrom.value) return false;
-        if (filterDateTo.value && expense.date > filterDateTo.value) return false;
-        if (filterCategory.value && expense.category !== filterCategory.value) return false;
-
-        if (filterSearch.value) {
-            const search = filterSearch.value.toLowerCase();
-            const matchesDescription = expense.description?.toLowerCase().includes(search);
-            const matchesCategory = expense.category.toLowerCase().includes(search);
-            const matchesSubcategory = expense.subcategory.toLowerCase().includes(search);
-            if (!matchesDescription && !matchesCategory && !matchesSubcategory) return false;
-        }
-
-        return true;
-    });
-}
-
-function clearFilters() {
-    filterDateFrom.value = '';
-    filterDateTo.value = '';
-    filterCategory.value = '';
-    filterSearch.value = '';
-    document.querySelectorAll('.quick-filter-chip.active')
-        .forEach(c => c.classList.remove('active'));
-    renderExpenses();
-}
-
-/**
- * Apply a quick date-range preset to the history filters.
- * Ranges are computed in local time and written as YYYY-MM-DD strings.
- */
-function applyQuickRange(range) {
-    const today = new Date();
-    let from = '';
-    let to = getLocalDateString(today);
-
-    if (range === 'today') {
-        from = to;
-    } else if (range === '7d') {
-        const d = new Date(today); d.setDate(d.getDate() - 6);
-        from = getLocalDateString(d);
-    } else if (range === '30d') {
-        const d = new Date(today); d.setDate(d.getDate() - 29);
-        from = getLocalDateString(d);
-    } else if (range === 'month') {
-        const d = new Date(today.getFullYear(), today.getMonth(), 1);
-        from = getLocalDateString(d);
-    } else { // 'all'
-        from = '';
-        to = '';
-    }
-
-    filterDateFrom.value = from;
-    filterDateTo.value = to;
-
-    document.querySelectorAll('.quick-filter-chip').forEach(c => {
-        c.classList.toggle('active', c.dataset.range === range);
-    });
-
-    renderExpenses();
-}
-
-// ===== Sorting =====
-function handleSort(column) {
-    if (currentSort.column === column) {
-        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-    } else {
-        currentSort.column = column;
-        currentSort.direction = 'asc';
-    }
-
-    document.querySelectorAll('.sortable').forEach(th => {
-        th.classList.remove('sorted-asc', 'sorted-desc');
-        if (th.dataset.sort === column) {
-            th.classList.add(`sorted-${currentSort.direction}`);
-        }
-    });
-
-    renderExpenses();
-}
-
-function sortExpenses(expensesToSort) {
-    return [...expensesToSort].sort((a, b) => {
-        let valueA = a[currentSort.column];
-        let valueB = b[currentSort.column];
-
-        if (currentSort.column === 'amount') {
-            valueA = parseFloat(valueA);
-            valueB = parseFloat(valueB);
-        } else if (currentSort.column === 'date') {
-            // Compare date strings directly (YYYY-MM-DD sorts lexicographically)
-            valueA = (valueA || '').substring(0, 10);
-            valueB = (valueB || '').substring(0, 10);
-        } else {
-            valueA = valueA?.toLowerCase() || '';
-            valueB = valueB?.toLowerCase() || '';
-        }
-
-        if (valueA < valueB) return currentSort.direction === 'asc' ? -1 : 1;
-        if (valueA > valueB) return currentSort.direction === 'asc' ? 1 : -1;
-        return 0;
-    });
-}
-
-// ===== Edit Expense =====
-function openEditModal(id) {
-    const expense = expenses.find(e => String(e.id) === String(id));
-    if (!expense) return;
-
-    editId.value = expense.id;
-    editDate.value = expense.date;
-    editCategory.value = expense.category;
-    updateSubcategories(expense.category, editSubcategory);
-    editSubcategory.value = expense.subcategory;
-    editAmount.value = expense.amount;
-    editDescription.value = expense.description || '';
-
-    editModal.classList.add('active');
-}
-
-function closeEditModal() {
-    editModal.classList.remove('active');
-}
-
-async function handleEditExpense(e) {
-    e.preventDefault();
-
-    const id = editId.value;
-    const input = {
-        id,
-        date: editDate.value,
-        category: editCategory.value,
-        subcategory: editSubcategory.value,
-        amount: parseFloat(editAmount.value),
-        description: editDescription.value.trim(),
-        currency: settings.currency
-    };
-
-    const result = window.__bridge.actions.updateExpense(input, { isIncomeCategory });
-    if (!result.ok) {
-        showToast(result.error, 'warning');
-        return;
-    }
-    expenses = result.list;
-
-    renderExpenses();
-    updateStats();
-    renderCharts();
-    checkBudgetAlert();
-    closeEditModal();
-}
-
-// ===== Delete Expense =====
-async function deleteExpense(id) {
-    const ok = await dialog.confirm({
-        title: 'Delete this entry?',
-        message: 'This can’t be undone.',
-        confirmText: 'Delete',
-        tone: 'danger'
-    });
-    if (!ok) return;
-    expenses = window.__bridge.actions.removeExpense(id);
-
-    renderExpenses();
-    updateStats();
-    renderCharts();
-    checkBudgetAlert();
-}
 
 async function handleDeleteAll() {
     if (expenses.length === 0) {
@@ -1984,7 +1668,7 @@ async function handleDeleteAll() {
         });
         if (!ok) return;
         expenses = window.__bridge.actions.setAllExpenses([]);
-        renderExpenses();
+        window.__bridge?.renderExpenses?.();
         updateStats();
         renderCharts();
         checkBudgetAlert();
@@ -2027,7 +1711,7 @@ async function handleDeleteAll() {
                 tone: 'error'
             });
         }
-        renderExpenses();
+        window.__bridge?.renderExpenses?.();
         updateStats();
         renderCharts();
         checkBudgetAlert();
@@ -2041,7 +1725,7 @@ async function handleDeleteAll() {
         });
         if (!ok) return;
         expenses = window.__bridge.actions.setAllExpenses([]);
-        renderExpenses();
+        window.__bridge?.renderExpenses?.();
         updateStats();
         renderCharts();
         checkBudgetAlert();
@@ -2206,7 +1890,7 @@ function importFromCSV(file) {
                 pushAllToCloud();
             }
 
-            renderExpenses();
+            window.__bridge?.renderExpenses?.();
             updateStats();
             renderCharts();
             checkBudgetAlert();
@@ -2320,8 +2004,8 @@ function saveSettings() {
 }
 
 // Make functions globally available
-window.openEditModal = openEditModal;
-window.deleteExpense = deleteExpense;
+window.openEditModal = (id) => window.__bridge?.openEditModal?.(id);
+window.deleteExpense = (id) => window.__bridge?.deleteExpense?.(id);
 window.deleteCategory = deleteCategory;
 window.deleteSubcategory = deleteSubcategory;
 
