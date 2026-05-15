@@ -549,6 +549,13 @@ function setupEventListeners() {
     // Form submission
     expenseForm.addEventListener('submit', handleAddExpense);
 
+    // Step-by-step stage gating: as the user types an amount, unlock the
+    // final step (note + Save) when the amount becomes a valid positive
+    // number, and re-lock if they clear it.
+    if (expenseAmount) {
+        expenseAmount.addEventListener('input', refreshAddStage);
+    }
+
     // Smart Add-modal picker setup (type filter buttons)
     document.querySelectorAll('.type-filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -597,6 +604,11 @@ function setupEventListeners() {
     filterCategory.addEventListener('change', renderExpenses);
     filterSearch.addEventListener('input', debounce(renderExpenses, 300));
     clearFiltersBtn.addEventListener('click', clearFilters);
+
+    // Quick date-range filter chips (Today / 7d / 30d / This month / All)
+    document.querySelectorAll('.quick-filter-chip').forEach(chip => {
+        chip.addEventListener('click', () => applyQuickRange(chip.dataset.range));
+    });
 
     // Sorting
     document.querySelectorAll('.sortable').forEach(th => {
@@ -1664,8 +1676,47 @@ function openAddModal() {
     buildAddCategoryPicker();
     addModal.classList.add('active');
 
-    // Focus amount for fast entry
-    setTimeout(() => { if (expenseAmount) expenseAmount.focus(); }, 50);
+    // Start in stage: category (everything else locked until a category is picked)
+    setAddStage('category');
+}
+
+/**
+ * Step-by-step "smart form" stage machine for the Add Transaction modal.
+ * Stages: 'category' -> 'subcategory' -> 'amount' -> 'note' (Save unlocked).
+ * Each stage locks all later steps via [data-stage] on the form (see styles.css),
+ * and pulses the next step that needs the user's attention.
+ *
+ * Note: this is purely UX gating — the existing `required` validation on
+ * hidden inputs still guards the submit handler.
+ */
+function setAddStage(stage) {
+    const form = document.getElementById('expense-form');
+    if (!form) return;
+    const order = ['category', 'subcategory', 'amount', 'note'];
+    if (!order.includes(stage)) stage = 'category';
+    form.dataset.stage = stage;
+
+    // Highlight the active step
+    form.querySelectorAll('[data-step]').forEach(el => {
+        el.classList.toggle('step-active', el.dataset.step === stage);
+    });
+
+    // Save button is only enabled when we have reached the final step
+    const saveBtn = document.getElementById('btn-add-transaction');
+    if (saveBtn) saveBtn.disabled = stage !== 'note';
+}
+
+// Re-evaluate the stage based on current form values (used by input listeners).
+function refreshAddStage() {
+    const cat = document.getElementById('expense-category');
+    const sub = document.getElementById('expense-subcategory');
+    const amt = document.getElementById('expense-amount');
+    if (!cat || !sub || !amt) return;
+    if (!cat.value) return setAddStage('category');
+    if (!sub.value) return setAddStage('subcategory');
+    const n = parseFloat(amt.value);
+    if (!Number.isFinite(n) || n <= 0) return setAddStage('amount');
+    setAddStage('note');
 }
 
 function buildAddCategoryPicker() {
@@ -1737,6 +1788,9 @@ function selectAddCategory(name) {
     const subSel = document.getElementById('picker-subcategory-selected');
     if (subSel) subSel.textContent = 'Pick one';
     buildAddSubcategoryChips(name);
+
+    // Unlock the subcategory step
+    setAddStage('subcategory');
 }
 
 function buildAddSubcategoryChips(category) {
@@ -1776,6 +1830,10 @@ function buildAddSubcategoryChips(category) {
             chip.classList.add('selected');
             const subSel = document.getElementById('picker-subcategory-selected');
             if (subSel) subSel.textContent = sub;
+            // Unlock the amount step and pull focus to it for fast entry
+            setAddStage('amount');
+            const amt = document.getElementById('expense-amount');
+            if (amt) setTimeout(() => amt.focus(), 50);
         });
         wrap.appendChild(chip);
     });
@@ -2042,6 +2100,43 @@ function clearFilters() {
     filterDateTo.value = '';
     filterCategory.value = '';
     filterSearch.value = '';
+    document.querySelectorAll('.quick-filter-chip.active')
+        .forEach(c => c.classList.remove('active'));
+    renderExpenses();
+}
+
+/**
+ * Apply a quick date-range preset to the history filters.
+ * Ranges are computed in local time and written as YYYY-MM-DD strings.
+ */
+function applyQuickRange(range) {
+    const today = new Date();
+    let from = '';
+    let to = getLocalDateString(today);
+
+    if (range === 'today') {
+        from = to;
+    } else if (range === '7d') {
+        const d = new Date(today); d.setDate(d.getDate() - 6);
+        from = getLocalDateString(d);
+    } else if (range === '30d') {
+        const d = new Date(today); d.setDate(d.getDate() - 29);
+        from = getLocalDateString(d);
+    } else if (range === 'month') {
+        const d = new Date(today.getFullYear(), today.getMonth(), 1);
+        from = getLocalDateString(d);
+    } else { // 'all'
+        from = '';
+        to = '';
+    }
+
+    filterDateFrom.value = from;
+    filterDateTo.value = to;
+
+    document.querySelectorAll('.quick-filter-chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.range === range);
+    });
+
     renderExpenses();
 }
 

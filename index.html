@@ -267,6 +267,13 @@
             <div class="nav-page" data-page="history">
                 <!-- Filter Section -->
                 <section class="filter-section">
+                    <div class="quick-filters" id="quick-filters" role="group" aria-label="Quick date filters">
+                        <button type="button" class="quick-filter-chip" data-range="today">Today</button>
+                        <button type="button" class="quick-filter-chip" data-range="7d">Last 7 days</button>
+                        <button type="button" class="quick-filter-chip" data-range="30d">Last 30 days</button>
+                        <button type="button" class="quick-filter-chip" data-range="month">This month</button>
+                        <button type="button" class="quick-filter-chip" data-range="all">All</button>
+                    </div>
                     <div class="filter-row">
                         <div class="filter-group">
                             <label for="filter-date-from">From</label>
@@ -595,20 +602,20 @@
                 <h3>＋ New Transaction</h3>
                 <button class="modal-close" id="add-close">&times;</button>
             </div>
-            <form id="expense-form" class="expense-form smart-form">
+            <form id="expense-form" class="expense-form smart-form" data-stage="category">
                 <!-- Hidden inputs hold the picker values -->
                 <input type="hidden" id="expense-category" required>
                 <input type="hidden" id="expense-subcategory" required>
 
                 <!-- Type filter for the category grid -->
-                <div class="type-filter" role="tablist" aria-label="Filter categories">
+                <div class="type-filter" role="tablist" aria-label="Filter categories" data-step="category">
                     <button type="button" class="type-filter-btn active" data-type="expense" role="tab">💸 Expense</button>
                     <button type="button" class="type-filter-btn" data-type="income" role="tab">💰 Income</button>
                     <button type="button" class="type-filter-btn" data-type="all" role="tab">All</button>
                 </div>
 
                 <!-- Visual category picker -->
-                <div class="picker-section">
+                <div class="picker-section" data-step="category">
                     <div class="picker-label">
                         <span>Category</span>
                         <div class="picker-label-right">
@@ -625,7 +632,7 @@
                 </div>
 
                 <!-- Subcategory chips -->
-                <div class="picker-section" id="subcategory-section" style="display:none;">
+                <div class="picker-section" id="subcategory-section" data-step="subcategory" style="display:none;">
                     <div class="picker-label">
                         <span>Subcategory</span>
                         <span class="picker-selected" id="picker-subcategory-selected">Pick one</span>
@@ -636,7 +643,7 @@
                 </div>
 
                 <!-- Date + Amount row -->
-                <div class="form-row compact-row">
+                <div class="form-row compact-row" data-step="amount">
                     <div class="form-group">
                         <label for="expense-date">📅 Date</label>
                         <input type="date" id="expense-date" required>
@@ -652,7 +659,7 @@
                 </div>
 
                 <!-- Description -->
-                <div class="form-row compact-row">
+                <div class="form-row compact-row" data-step="note">
                     <div class="form-group form-group-wide">
                         <label for="expense-description">📝 Description / Note</label>
                         <input type="text" id="expense-description" placeholder="Optional note..." maxlength="200"
@@ -660,9 +667,9 @@
                     </div>
                 </div>
 
-                <div class="modal-actions">
+                <div class="modal-actions" data-step="note">
                     <button type="button" class="btn-cancel" id="add-cancel">Cancel</button>
-                    <button type="submit" class="btn-save btn-add-primary" id="btn-add-transaction">
+                    <button type="submit" class="btn-save btn-add-primary" id="btn-add-transaction" disabled>
                         <span class="btn-icon">＋</span> Add Transaction
                     </button>
                 </div>
@@ -750,7 +757,7 @@
         </button>
         <button class="nav-item" data-page="history">
             <span class="nav-icon">📚</span>
-            <span class="nav-label">Library</span>
+            <span class="nav-label">History</span>
         </button>
         <button class="nav-item" data-page="analytics">
             <span class="nav-icon">📊</span>

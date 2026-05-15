@@ -1615,6 +1615,15 @@ body {
 
 .modal.active {
     display: flex;
+    overscroll-behavior: contain;
+}
+
+/* Lock background scroll while any modal is active. Uses :has() so we
+   don't need to toggle a body class from every open/close call site. */
+html:has(.modal.active),
+html:has(.modal.active) body {
+    overflow: hidden;
+    touch-action: none;
 }
 
 .modal-content {
@@ -3697,3 +3706,161 @@ body.landing-open { overflow: hidden; }
     }
 }
 
+
+/* =========================================================================
+   Step-by-step "smart form" stage gating (Add Transaction modal)
+   Stages: category ? subcategory ? amount ? note (Save)
+   The form has data-stage="<current>". Steps further than the current
+   stage are locked: dimmed and non-interactive. The active step pulses.
+   ========================================================================= */
+
+.smart-form [data-step] {
+    transition: opacity 0.25s ease, filter 0.25s ease, transform 0.25s ease;
+}
+
+/* Lock any step that is not yet reached */
+.smart-form[data-stage="category"] [data-step="subcategory"],
+.smart-form[data-stage="category"] [data-step="amount"],
+.smart-form[data-stage="category"] [data-step="note"],
+.smart-form[data-stage="subcategory"] [data-step="amount"],
+.smart-form[data-stage="subcategory"] [data-step="note"],
+.smart-form[data-stage="amount"] [data-step="note"] {
+    opacity: 0.32;
+    filter: saturate(0.55);
+    pointer-events: none;
+    user-select: none;
+}
+
+/* The Cancel button is the ONE thing always reachable, even in locked
+   action row. */
+.smart-form .modal-actions[data-step] .btn-cancel {
+    pointer-events: auto;
+    opacity: 1;
+    filter: none;
+}
+
+/* Disabled Save: visual when stage hasn't reached note yet, or
+   when the disabled attribute is set */
+.smart-form #btn-add-transaction:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* Active-step glow: subtle outline pulse on the section the user
+   should engage with next. */
+@keyframes step-glow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(99, 179, 237, 0);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(99, 179, 237, 0.18);
+    }
+}
+
+.smart-form [data-step].step-active {
+    border-radius: var(--radius-lg, 12px);
+    animation: step-glow 1.8s ease-in-out infinite;
+    position: relative;
+}
+
+/* Small "next-up" caret hint on the active picker label */
+.smart-form [data-step].step-active .picker-label > span:first-child::after,
+.smart-form [data-step].step-active > .form-group label::after {
+    content: " ? next";
+    color: var(--accent, #63b3ed);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    opacity: 0.85;
+    margin-left: 4px;
+}
+
+/* When the amount step is active, highlight the amount input itself */
+.smart-form[data-stage="amount"] #expense-amount {
+    box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.25);
+    border-color: var(--accent, #63b3ed);
+}
+
+/* Once everything is ready, give the Save button a gentle attention pulse */
+@keyframes save-pulse {
+    0%, 100% { transform: translateY(0); box-shadow: 0 4px 14px rgba(72, 187, 120, 0.25); }
+    50%      { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(72, 187, 120, 0.45); }
+}
+
+.smart-form[data-stage="note"] #btn-add-transaction:not(:disabled) {
+    animation: save-pulse 1.8s ease-in-out infinite;
+}
+
+/* =========================================================================
+   Bottom-nav "Log" attention pulse � naturally draws the eye to the
+   primary add entry point when the dashboard is idle.
+   ========================================================================= */
+@keyframes nav-add-attract {
+    0%, 100% {
+        transform: scale(1);
+        text-shadow: 0 0 0 rgba(72, 187, 120, 0);
+    }
+    50% {
+        transform: scale(1.12);
+        text-shadow: 0 0 14px rgba(72, 187, 120, 0.6);
+    }
+}
+
+.bottom-nav .nav-item[data-page="add"] .nav-icon {
+    display: inline-block;
+    animation: nav-add-attract 2.4s ease-in-out infinite;
+    transform-origin: center;
+}
+
+/* Stop the pulse while the user is already on the Add page or modal is open */
+.bottom-nav .nav-item[data-page="add"].active .nav-icon,
+body.modal-open .bottom-nav .nav-item[data-page="add"] .nav-icon {
+    animation: none;
+    transform: none;
+    text-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .smart-form [data-step].step-active,
+    .smart-form[data-stage="note"] #btn-add-transaction:not(:disabled),
+    .bottom-nav .nav-item[data-page="add"] .nav-icon {
+        animation: none;
+    }
+}
+/* ===== Quick filter chips (History page) ===== */
+.quick-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.quick-filter-chip {
+    background: var(--bg-input, rgba(255,255,255,0.04));
+    color: var(--text, inherit);
+    border: 1px solid var(--border, rgba(255,255,255,0.12));
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.quick-filter-chip:hover {
+    background: var(--bg-hover, rgba(255,255,255,0.08));
+    border-color: var(--accent, #63b3ed);
+}
+
+.quick-filter-chip:active {
+    transform: scale(0.96);
+}
+
+.quick-filter-chip.active {
+    background: var(--accent, #63b3ed);
+    color: #fff;
+    border-color: var(--accent, #63b3ed);
+    box-shadow: 0 2px 8px rgba(99, 179, 237, 0.35);
+}
