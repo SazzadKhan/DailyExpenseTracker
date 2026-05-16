@@ -1,15 +1,22 @@
-// ===== Storage adapter =====
-// Provides a uniform API over two backends:
-//   - LocalBackend: no-op (data is already saved to localStorage by the app)
-//   - SheetsBackend: writes through to the user's Google Sheet
+// js/services/storage.js
+// Cloud-sync backend facade. Wraps either a no-op LocalBackend (used when
+// the user is signed out / using the app offline) or the SheetsBackend (when
+// signed in to Google).
 //
-// The app keeps doing its own localStorage writes so offline / signed-out
-// behaviour is unchanged. Only the cloud-mirroring layer is swapped.
+// Local app data is persisted independently via js/services/local-store.js.
+// This module is only the *cloud mirror* layer.
+//
+// Note: SheetsBackend currently delegates to `window.sheetsApi` (still a
+// classic script). The Sheets layer will be migrated next.
+
+import { log } from '../core/log.js';
+
+const $log = log('storage');
 
 const NULL_BACKEND = {
     name: 'local',
     async init() { return true; },
-    async pullAll() { return null; },             // nothing to pull
+    async pullAll() { return null; },
     async pushAll() { /* no-op */ },
     async addExpense() { /* no-op */ },
     async updateExpense() { /* no-op */ },
@@ -28,7 +35,6 @@ const SHEETS_BACKEND = {
         return true;
     },
 
-    // Returns { expenses, settings, categories } from the user's sheet.
     async pullAll() {
         const [expenses, settings, categories] = await Promise.all([
             window.sheetsApi.listExpenses(),
@@ -46,16 +52,16 @@ const SHEETS_BACKEND = {
         ]);
     },
 
-    addExpense(exp) { return window.sheetsApi.appendExpense(exp); },
-    updateExpense(exp) { return window.sheetsApi.updateExpense(exp); },
-    deleteExpense(id) { return window.sheetsApi.deleteExpense(id); },
-    deleteAllExpenses() { return window.sheetsApi.deleteAllExpenses(); },
+    addExpense(exp)          { return window.sheetsApi.appendExpense(exp); },
+    updateExpense(exp)       { return window.sheetsApi.updateExpense(exp); },
+    deleteExpense(id)        { return window.sheetsApi.deleteExpense(id); },
+    deleteAllExpenses()      { return window.sheetsApi.deleteAllExpenses(); },
     replaceAllExpenses(list) { return window.sheetsApi.replaceAllExpenses(list); },
-    saveSettings(s) { return window.sheetsApi.saveSettings(s); },
-    saveCategories(c) { return window.sheetsApi.saveCategories(c); }
+    saveSettings(s)          { return window.sheetsApi.saveSettings(s); },
+    saveCategories(c)        { return window.sheetsApi.saveCategories(c); }
 };
 
-const storage = {
+export const storage = {
     backend: NULL_BACKEND,
 
     isCloud() { return this.backend.name === 'sheets'; },
@@ -67,11 +73,9 @@ const storage = {
         this.backend = SHEETS_BACKEND;
     },
 
-    // Fire-and-forget wrappers — failures are logged but don't block the UI.
-    // Returns a promise so callers can await if they want.
     _wrap(fnName, ...args) {
         const p = Promise.resolve().then(() => this.backend[fnName](...args));
-        p.catch(err => console.error(`[storage.${fnName}]`, err));
+        p.catch(err => $log.error(`${fnName}`, err));
         return p;
     },
 
@@ -86,4 +90,8 @@ const storage = {
     saveCategories(c)         { return this._wrap('saveCategories', c); }
 };
 
-window.storage = storage;
+// Back-compat: legacy code (auth.js, sheets-api.js, classic scripts) still
+// references window.storage. Remove once those services are migrated too.
+if (typeof window !== 'undefined') {
+    window.storage = storage;
+}

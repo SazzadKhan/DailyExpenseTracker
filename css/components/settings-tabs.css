@@ -1,0 +1,53 @@
+/* css/components/settings-tabs.css
+   Tab switcher inside the Settings page. Paired with js/features/settings/. */
+
+.settings-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 22px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+}
+
+.settings-tab {
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    border-radius: var(--radius-sm);
+}
+
+.settings-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.settings-tab.active {
+    background: var(--primary);
+    color: white;
+}
+
+.settings-content {
+    padding: 10px 0;
+}
+
+.settings-content.hidden {
+    display: none;
+}
+
+.settings-content h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 18px;
+    color: var(--text-primary);
+}
+
+.budget-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}

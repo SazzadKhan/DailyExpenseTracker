@@ -1,0 +1,95 @@
+/* css/components/charts.css
+   Charts section: container, tab switcher, month filter, chart wrappers.
+   Paired with js/features/charts/. */
+
+.charts-section {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 25px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border);
+}
+
+.charts-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.charts-header .section-title {
+    margin-bottom: 0;
+}
+
+.chart-tabs {
+    display: flex;
+    gap: 8px;
+}
+
+.chart-tab {
+    padding: 8px 16px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.chart-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.chart-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.charts-container {
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+}
+
+.chart-wrapper {
+    position: relative;
+    width: 100%;
+    min-height: 300px;
+    height: 100%;
+    flex: 1;
+}
+
+.chart-wrapper.hidden {
+    display: none;
+}
+
+.chart-filter-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+}
+
+.chart-month-select {
+    padding: 6px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.chart-month-select:hover,
+.chart-month-select:focus {
+    border-color: var(--primary);
+    outline: none;
+}

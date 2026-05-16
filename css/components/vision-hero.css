@@ -1,0 +1,378 @@
+/* css/components/vision-hero.css
+ * The "Amazing Vision" hero panel that opens the dashboard page.
+ * Tagline + three principle cards from docs/BUSINESS_PLAN.md §12.
+ */
+
+.vision-hero {
+    position: relative;
+    margin: 0 0 var(--space-xl, 24px);
+    padding: clamp(20px, 4vw, 36px) clamp(18px, 4vw, 32px);
+    border-radius: var(--radius-lg, 18px);
+    overflow: hidden;
+    isolation: isolate;
+    background:
+        radial-gradient(120% 140% at 0% 0%,
+            color-mix(in srgb, var(--accent, #7c5cff) 28%, transparent) 0%,
+            transparent 55%),
+        radial-gradient(120% 140% at 100% 0%,
+            color-mix(in srgb, var(--accent-2, #22d3ee) 24%, transparent) 0%,
+            transparent 60%),
+        linear-gradient(135deg,
+            color-mix(in srgb, var(--surface, #11162a) 92%, black) 0%,
+            color-mix(in srgb, var(--surface, #11162a) 96%, var(--accent, #7c5cff) 6%) 100%);
+    border: 1px solid color-mix(in srgb, var(--accent, #7c5cff) 30%, transparent);
+    box-shadow:
+        0 18px 50px -28px color-mix(in srgb, var(--accent, #7c5cff) 70%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+    animation: vision-hero-in 600ms cubic-bezier(.22,.85,.32,1) both;
+}
+
+/* Animated glow blob behind the headline. */
+.vision-hero::before {
+    content: '';
+    position: absolute;
+    inset: -40% -10% auto auto;
+    width: 60%;
+    aspect-ratio: 1;
+    background: radial-gradient(circle,
+        color-mix(in srgb, var(--accent-2, #22d3ee) 55%, transparent) 0%,
+        transparent 65%);
+    filter: blur(40px);
+    opacity: .55;
+    z-index: -1;
+    animation: vision-blob 14s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+
+.vision-hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    margin: 0 0 14px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--text-muted, #9aa3b2) 75%, white);
+    background: color-mix(in srgb, white 6%, transparent);
+    border: 1px solid color-mix(in srgb, white 10%, transparent);
+}
+.vision-hero-eyebrow::before {
+    content: '✦';
+    color: var(--accent-2, #22d3ee);
+    font-size: .85rem;
+}
+
+.vision-hero-tagline {
+    margin: 0 0 8px;
+    font-size: clamp(1.55rem, 3.4vw, 2.4rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -.01em;
+    color: var(--text, #f5f7fa);
+}
+.vision-hero-tagline em {
+    font-style: normal;
+    background: linear-gradient(120deg,
+        var(--accent, #7c5cff) 0%,
+        var(--accent-2, #22d3ee) 55%,
+        var(--accent, #7c5cff) 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+            background-clip: text;
+    -webkit-text-fill-color: transparent;
+            color: transparent;
+    animation: vision-shimmer 6s linear infinite;
+}
+
+.vision-hero-mission {
+    margin: 0 0 22px;
+    max-width: 64ch;
+    font-size: .98rem;
+    line-height: 1.55;
+    color: color-mix(in srgb, var(--text, #f5f7fa) 78%, transparent);
+}
+
+.vision-principles {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.vision-principle {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--surface-2, #1a2040) 55%, transparent);
+    border: 1px solid color-mix(in srgb, white 8%, transparent);
+    backdrop-filter: blur(6px);
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.vision-principle:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--accent, #7c5cff) 50%, transparent);
+    box-shadow: 0 12px 28px -18px color-mix(in srgb, var(--accent, #7c5cff) 80%, transparent);
+}
+
+.vision-principle-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+.vision-principle-title {
+    font-size: .95rem;
+    font-weight: 600;
+    color: var(--text, #f5f7fa);
+}
+.vision-principle-body {
+    font-size: .85rem;
+    line-height: 1.45;
+    color: color-mix(in srgb, var(--text-muted, #9aa3b2) 90%, white);
+}
+
+/* Animations */
+@keyframes vision-hero-in {
+    from { opacity: 0; transform: translateY(12px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+}
+@keyframes vision-shimmer {
+    0%   { background-position:   0% 50%; }
+    100% { background-position: 200% 50%; }
+}
+@keyframes vision-blob {
+    0%   { transform: translate(0, 0)      scale(1); }
+    100% { transform: translate(-8%, 6%)   scale(1.15); }
+}
+
+@media (max-width: 540px) {
+    .vision-hero { margin-bottom: 16px; }
+    .vision-hero-mission { font-size: .92rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vision-hero,
+    .vision-hero::before,
+    .vision-hero-tagline em {
+        animation: none !important;
+    }
+    .vision-principle { transition: none; }
+}
+
+/* ---- Landing-page variant -------------------------------------------------
+ * The base .vision-hero is a standalone panel with its own gradient. Inside
+ * .landing-card we let the card own the background and just keep the typo
+ * + animated tagline + accent glow blob.
+ */
+.vision-hero--landing {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+    overflow: visible;
+    animation: none;
+}
+.vision-hero--landing::before {
+    inset: -30% 10% auto 10%;
+    width: 80%;
+    opacity: .35;
+}
+.vision-hero--landing .vision-hero-eyebrow {
+    display: inline-flex;
+    margin: 4px auto 10px;
+}
+.vision-hero--landing .vision-hero-tagline {
+    font-size: clamp(1.4rem, 3vw, 1.9rem);
+    margin: 0 0 10px;
+}
+.vision-hero--landing .vision-hero-mission {
+    margin: 0 auto 22px;
+    max-width: 48ch;
+}
+.vision-hero--landing .vision-principles {
+    margin: 0 0 24px;
+    text-align: left;
+}
+
+/* Inline pill variant for tight spaces (landing card). */
+.vision-principles--inline {
+    display: flex !important;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 4px 0 22px;
+}
+.vision-principles--inline .vision-principle {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: color-mix(in srgb, white 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent, #7c5cff) 28%, transparent);
+}
+.vision-principles--inline .vision-principle:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: color-mix(in srgb, var(--accent, #7c5cff) 55%, transparent);
+    background: color-mix(in srgb, var(--accent, #7c5cff) 10%, transparent);
+}
+.vision-principles--inline .vision-principle-icon { font-size: 1rem; }
+.vision-principles--inline .vision-principle-title { font-size: .82rem; }
+.vision-principles--inline .vision-principle-body { display: none; }
+
+/* Two-line buttons on the landing card. */
+.landing-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 22px;
+}
+.landing-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 22px;
+    border-radius: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: center;
+    isolation: isolate;
+    overflow: hidden;
+    transition: transform .2s cubic-bezier(.22,.85,.32,1),
+                box-shadow .25s ease,
+                background-color .2s ease,
+                border-color .2s ease;
+}
+.landing-btn:hover { transform: translateY(-2px); }
+.landing-btn:active { transform: translateY(0); }
+.landing-btn:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent-2, #22d3ee) 80%, white);
+    outline-offset: 2px;
+}
+
+.landing-btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+.landing-btn-text {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    line-height: 1.25;
+}
+.landing-btn-title {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: .005em;
+}
+.landing-btn-sub {
+    font-size: .76rem;
+    font-weight: 400;
+    opacity: .72;
+}
+
+/* Primary — clean white Google card with a soft brand-tinted glow. */
+.landing-btn--primary {
+    background: #ffffff;
+    color: #1f1f1f;
+    border: 1px solid rgba(0, 0, 0, .1);
+    box-shadow:
+        0 1px 0 rgba(255,255,255,.6) inset,
+        0 1px 2px rgba(0,0,0,.18),
+        0 10px 30px -18px rgba(60, 64, 67, .55);
+}
+.landing-btn--primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg,
+        rgba(66,133,244,.55), rgba(52,168,83,.55),
+        rgba(251,188,5,.55), rgba(234,67,53,.55));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0;
+    transition: opacity .25s ease;
+    pointer-events: none;
+    z-index: 1;
+}
+.landing-btn--primary:hover {
+    background: #fafbff;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,.6) inset,
+        0 2px 8px rgba(0,0,0,.22),
+        0 18px 36px -18px rgba(60, 64, 67, .6);
+}
+.landing-btn--primary:hover::before { opacity: 1; }
+.landing-btn--primary .landing-btn-sub { color: #5f6368; opacity: 1; }
+.landing-btn--primary .landing-btn-icon svg { width: 20px; height: 20px; }
+
+/* Secondary — outlined ghost on the dark card, with animated accent border. */
+.landing-btn--ghost {
+    background: color-mix(in srgb, white 4%, transparent);
+    color: var(--text, #f5f7fa);
+    border: 1px solid color-mix(in srgb, white 16%, transparent);
+    backdrop-filter: blur(6px);
+}
+.landing-btn--ghost::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: conic-gradient(from 0deg,
+        transparent 0deg,
+        color-mix(in srgb, var(--accent, #7c5cff) 55%, transparent) 90deg,
+        color-mix(in srgb, var(--accent-2, #22d3ee) 55%, transparent) 180deg,
+        transparent 270deg,
+        transparent 360deg);
+    opacity: 0;
+    transition: opacity .3s ease;
+    z-index: -1;
+    animation: landing-btn-spin 6s linear infinite;
+    animation-play-state: paused;
+}
+.landing-btn--ghost::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: calc(14px - 1px);
+    background: color-mix(in srgb, var(--surface, #11162a) 92%, black);
+    z-index: -1;
+}
+.landing-btn--ghost:hover {
+    background: color-mix(in srgb, white 6%, transparent);
+    border-color: transparent;
+}
+.landing-btn--ghost:hover::before {
+    opacity: 1;
+    animation-play-state: running;
+}
+
+@keyframes landing-btn-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .landing-btn,
+    .landing-btn--ghost::before { transition: none; animation: none; }
+    .landing-btn:hover { transform: none; }
+}
+

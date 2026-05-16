@@ -24,17 +24,20 @@
 
     <script type="module">
         import {
-            selectStats, selectRecent, isIncome, sortByDateDesc
+            selectStats, selectRecent, isIncome, sortByDateDesc,
+            validateExpense, addExpense, updateExpense, deleteExpense, deleteAll, sortBy
         } from '../js/features/expenses/expenses.model.js';
         import { applyFilters, emptyFilters }
             from '../js/features/filters/filters.model.js';
         import {
             selectDailySeries, selectMonthlyTotals, selectCategoryBreakdown
         } from '../js/features/charts/charts.model.js';
-        import { splitByType, isIncomeCategory, isDefaultCategory }
+        import { splitByType, isIncomeCategory, isDefaultCategory, subcategoriesOf }
             from '../js/features/categories/categories.model.js';
         import { getLocalDateString, normalizeDateString, formatCurrency }
             from '../js/core/format.js';
+        import { store } from '../js/core/store.js';
+        import { EVENTS } from '../js/core/events.js';
 
         const results = [];
         function t(name, fn) {
@@ -94,6 +97,60 @@
             assertEq(r[r.length - 1].date <= r[0].date, true);
         });
 
+        // ---- expenses.model CRUD ---------------------------------------------
+        const validInput = {
+            date: today, category: 'Food & Dining', subcategory: 'Groceries',
+            amount: 12.5, description: 'milk', currency: 'USD'
+        };
+        t('validateExpense rejects missing category', () => {
+            const r = validateExpense({ ...validInput, category: '' });
+            assertEq(r.ok, false);
+        });
+        t('validateExpense rejects non-positive amount', () => {
+            const r = validateExpense({ ...validInput, amount: 0 });
+            assertEq(r.ok, false);
+        });
+        t('validateExpense rejects bad date', () => {
+            const r = validateExpense({ ...validInput, date: '05/15/2026' });
+            assertEq(r.ok, false);
+        });
+        t('validateExpense produces expense type from non-income category', () => {
+            const r = validateExpense(validInput);
+            assert(r.ok);
+            assertEq(r.expense.type, 'expense');
+        });
+        t('validateExpense flags income from Income category', () => {
+            const r = validateExpense({ ...validInput, category: 'Income', subcategory: 'Salary' });
+            assert(r.ok);
+            assertEq(r.expense.type, 'income');
+        });
+        t('addExpense returns new array (no mutation)', () => {
+            const before = sample.slice();
+            const after = addExpense(before, { ...sample[0], id: '99' });
+            assertEq(after.length, sample.length + 1);
+            assertEq(before.length, sample.length);
+        });
+        t('updateExpense replaces by id and returns same ref if not found', () => {
+            const upd = { ...sample[0], description: 'changed' };
+            const out = updateExpense(sample, upd);
+            assertEq(out.find(e => e.id === '1').description, 'changed');
+            const missing = updateExpense(sample, { ...sample[0], id: 'nope' });
+            assertEq(missing, sample);
+        });
+        t('deleteExpense filters by id', () => {
+            const out = deleteExpense(sample, '1');
+            assertEq(out.length, sample.length - 1);
+            assert(!out.some(e => e.id === '1'));
+        });
+        t('sortBy amount ascending', () => {
+            const out = sortBy(sample, 'amount', 'asc');
+            assertEq(out[0].amount, 5);
+        });
+        t('sortBy date descending', () => {
+            const out = sortBy(sample, 'date', 'desc');
+            assertEq(out[out.length - 1].id, '5'); // oldest last
+        });
+
         // ---- filters.model -----------------------------------------------------
         t('applyFilters: empty filter returns full list', () => {
             assertEq(applyFilters(sample, emptyFilters()).length, sample.length);
@@ -148,6 +205,96 @@
             assertEq(income.length, 1);
             assertEq(expense.length, 1);
             assertEq(income[0][0], 'Income');
+        });
+        t('subcategoriesOf returns names or empty array', () => {
+            const cats = { 'Food': { icon: '🍔', subcategories: ['Coffee', 'Lunch'] } };
+            assertEq(subcategoriesOf(cats, 'Food'), ['Coffee', 'Lunch']);
+            assertEq(subcategoriesOf(cats, 'Missing'), []);
+            assertEq(subcategoriesOf({}, 'Anything'), []);
+        });
+
+        // ---- edge cases --------------------------------------------------------
+        t('selectStats handles empty list', () => {
+            const s = selectStats([]);
+            assertEq(s.todaySpend, 0);
+            assertEq(s.monthIncome, 0);
+            assertEq(s.monthExpense, 0);
+            assertEq(s.totalEntries, 0);
+        });
+        t('deleteAll returns empty array', () => {
+            assertEq(deleteAll(), []);
+        });
+        t('validateExpense coerces numeric strings', () => {
+            const r = validateExpense({ ...validInput, amount: '12.50' });
+            assert(r.ok);
+            assertEq(r.expense.amount, 12.5);
+        });
+        t('validateExpense rejects negative amount', () => {
+            const r = validateExpense({ ...validInput, amount: -1 });
+            assertEq(r.ok, false);
+        });
+        t('validateExpense trims whitespace from description', () => {
+            const r = validateExpense({ ...validInput, description: '   hello   ' });
+            assert(r.ok);
+            assertEq(r.expense.description, 'hello');
+        });
+        t('validateExpense honors custom isIncomeCategory predicate', () => {
+            const r = validateExpense(
+                { ...validInput, category: 'Side Hustle', subcategory: 'Tutoring' },
+                { isIncomeCategory: (n) => n === 'Side Hustle' }
+            );
+            assert(r.ok);
+            assertEq(r.expense.type, 'income');
+        });
+        t('applyFilters: search is case-insensitive', () => {
+            const out = applyFilters(sample, { ...emptyFilters(), search: 'LATTE' });
+            assertEq(out.length, 1);
+        });
+        t('applyFilters: dateFrom/dateTo are inclusive', () => {
+            const out = applyFilters(sample, { ...emptyFilters(), dateFrom: '2025-01-15', dateTo: '2025-01-15' });
+            assertEq(out.length, 1);
+            assertEq(out[0].id, '5');
+        });
+        t('addExpense and updateExpense preserve immutability', () => {
+            const orig = sample.slice();
+            const ref = sample;
+            addExpense(sample, { ...sample[0], id: 'X' });
+            updateExpense(sample, { ...sample[0], description: 'mutated' });
+            assertEq(sample, orig);
+            assert(sample === ref, 'reference unchanged');
+        });
+
+        // ---- store -------------------------------------------------------------
+        t('store.update applies patch and fires specific event', () => {
+            const before = store.getState();
+            let fired = 0;
+            const off = store.subscribe(EVENTS.SETTINGS_CHANGED, () => fired++);
+            store.update({ settings: { ...(before.settings || {}), currency: 'EUR' } }, EVENTS.SETTINGS_CHANGED);
+            assertEq(store.getState().settings.currency, 'EUR');
+            assertEq(fired, 1);
+            off();
+            // restore
+            store.update({ settings: before.settings }, EVENTS.SETTINGS_CHANGED);
+        });
+        t('store.subscribe returns unsubscribe', () => {
+            let fired = 0;
+            const off = store.subscribe(EVENTS.STATE_CHANGED, () => fired++);
+            store.update({}, EVENTS.STATE_CHANGED);
+            off();
+            store.update({}, EVENTS.STATE_CHANGED);
+            assertEq(fired, 1);
+        });
+        t('store specific event also fires STATE_CHANGED', () => {
+            let stateFired = 0;
+            const off = store.subscribe(EVENTS.STATE_CHANGED, () => stateFired++);
+            store.update({}, EVENTS.EXPENSES_CHANGED);
+            off();
+            assertEq(stateFired, 1);
+        });
+        t('store.getState returns current snapshot', () => {
+            const s = store.getState();
+            assert(s && typeof s === 'object');
+            assert(Array.isArray(s.expenses));
         });
 
         // ---- render --------

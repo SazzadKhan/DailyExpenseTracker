@@ -1,4 +1,5 @@
-// ===== Google Identity Services (GIS) OAuth =====
+// js/services/auth.js
+// Google Identity Services (GIS) OAuth.
 // Handles sign-in, token management, and user profile.
 //
 // Required scopes:
@@ -8,6 +9,8 @@
 //
 // Public Client ID is read from window.GOOGLE_OAUTH_CLIENT_ID (set in index.html
 // or via a deployment-time replacement). It is NOT a secret — see OAUTH_SETUP.md.
+//
+// Also exposed on `window.auth` for sheets-api.js back-compat.
 
 const AUTH_SCOPES = [
     'openid',
@@ -20,7 +23,7 @@ const AUTH_SCOPES = [
 const TOKEN_STORAGE_KEY = 'auth.token';
 const PROFILE_STORAGE_KEY = 'auth.profile';
 
-const auth = {
+export const auth = {
     _tokenClient: null,
     _gisReady: false,
     _gisReadyPromise: null,
@@ -30,7 +33,6 @@ const auth = {
     _listeners: new Set(),
     _interactiveResolver: null,
 
-    // Wait until the GIS script loads.
     _waitForGis() {
         if (this._gisReady) return Promise.resolve();
         if (this._gisReadyPromise) return this._gisReadyPromise;
@@ -68,7 +70,6 @@ const auth = {
             error_callback: (err) => this._onTokenError(err)
         });
 
-        // Restore cached token + profile if still valid
         try {
             const cached = JSON.parse(sessionStorage.getItem(TOKEN_STORAGE_KEY) || 'null');
             if (cached && cached.expiresAt > Date.now() + 60_000) {
@@ -123,11 +124,9 @@ const auth = {
                 }));
             } catch (_) { /* ignore */ }
 
-            // Resolve any waiting interactive sign-in
             const resolver = this._interactiveResolver;
             this._interactiveResolver = null;
 
-            // Fetch profile (best-effort) then notify listeners
             this._fetchProfile().finally(() => {
                 this._emit();
                 if (resolver) resolver(true);
@@ -160,7 +159,7 @@ const auth = {
                 picture: data.picture || null,
                 sub: data.sub
             };
-            try { localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(this._profile)); } catch (_) {}
+            try { localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(this._profile)); } catch (_) { /* ignore */ }
             return this._profile;
         } catch (e) {
             console.warn('[auth] userinfo fetch failed', e);
@@ -168,12 +167,10 @@ const auth = {
         }
     },
 
-    // Interactive sign-in — shows the Google account chooser.
     async signIn() {
         if (!this._tokenClient) throw new Error('Auth not configured');
         return new Promise((resolve) => {
             this._interactiveResolver = resolve;
-            // 'consent' the first time so user sees scopes; '' afterward for silent re-grant.
             const prompt = this._profile ? '' : 'consent';
             try {
                 this._tokenClient.requestAccessToken({ prompt });
@@ -185,7 +182,6 @@ const auth = {
         });
     },
 
-    // Try to silently get a token (no UI). Returns true on success.
     async silentSignIn() {
         if (!this._tokenClient || !this._profile) return false;
         return new Promise((resolve) => {
@@ -207,13 +203,15 @@ const auth = {
         try {
             sessionStorage.removeItem(TOKEN_STORAGE_KEY);
             localStorage.removeItem(PROFILE_STORAGE_KEY);
-        } catch (_) {}
+        } catch (_) { /* ignore */ }
 
         if (token && window.google && google.accounts && google.accounts.oauth2) {
-            try { google.accounts.oauth2.revoke(token, () => {}); } catch (_) {}
+            try { google.accounts.oauth2.revoke(token, () => {}); } catch (_) { /* ignore */ }
         }
         this._emit();
     }
 };
 
-window.auth = auth;
+if (typeof window !== 'undefined') {
+    /** @type {any} */ (window).auth = auth;
+}
