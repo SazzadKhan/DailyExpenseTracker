@@ -10,6 +10,7 @@ export const STORAGE_KEYS = Object.freeze({
     CATEGORY_PICKER_VIEW: 'categoryPickerView',
     SIGNIN_BANNER_DISMISSED: 'signinBannerDismissed',
     AUTH_MODE: 'authMode',
+    GUEST_MODE_CHOSEN: 'guestModeChosen',
     LAST_SIGNED_IN_EMAIL: 'lastSignedInEmail',
     SCHEMA_VERSION: 'schemaVersion',
     // expenseSheetId is namespaced per-email: `expenseSheetId:${email}`

@@ -21,6 +21,11 @@ body {
     min-height: 100vh;
 }
 
+/* Prevent first-paint dashboard flash until auth mode is resolved. */
+body.auth-pending .app-container {
+    visibility: hidden;
+}
+
 /* ===== App Container ===== */
 .app-container {
     max-width: 1400px;
