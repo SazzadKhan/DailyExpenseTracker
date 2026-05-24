@@ -26,7 +26,8 @@ let state = /** @type {any} */ ({
     isSyncing: false,
     lastSyncTime: null,
     authMode: null,
-    filters: { dateFrom: '', dateTo: '', category: '', search: '' }
+    filters: { dateFrom: '', dateTo: '', category: '', search: '' },
+    syncQueue: []
 });
 
 function emit(event) {

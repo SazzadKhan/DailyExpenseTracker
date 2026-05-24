@@ -1,23 +1,39 @@
-// js/features/sync/index.js
-// Google Sheets cloud sync. Delegates the heavy lifting to the storage
-// facade in js/services/storage.js; this module owns:
-//   - the `pull` / `push` flows (state + sync-status UI),
-//   - the `#sync-status` pill rendering,
-//   - the auto-pull interval.
-
 import { store } from '../../core/store.js';
 import { EVENTS } from '../../core/events.js';
 import { $ } from '../../core/dom.js';
 import { normalizeDateString } from '../../core/format.js';
-import { DEFAULT_CATEGORIES } from '../../core/constants.js';
+import { DEFAULT_CATEGORIES, STORAGE_KEYS } from '../../core/constants.js';
 import { storage } from '../../services/storage.js';
 import { log } from '../../core/log.js';
+import { getQueue, saveQueue } from '../expenses/actions.js';
+import { dialog } from '../../services/dialog.js';
+import { showToast } from '../../core/toast.js';
 
 const $log = log('sync');
 
 const AUTO_PULL_INTERVAL_MS = 5 * 60 * 1000;
 
-/** @type {Date|null} */ let lastSyncTime = null;
+/** @type {Date|null} */
+let lastSyncTime = (() => {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_TIME);
+        return raw ? new Date(raw) : null;
+    } catch (_) {
+        return null;
+    }
+})();
+
+function setLastSyncTime(date) {
+    lastSyncTime = date;
+    try {
+        if (date) {
+            localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, date.toISOString());
+        } else {
+            localStorage.removeItem(STORAGE_KEYS.LAST_SYNC_TIME);
+        }
+    } catch (_) {}
+}
+
 let isSyncing = false;
 
 export function getLastSyncTime() { return lastSyncTime; }
@@ -56,6 +72,118 @@ export function updateSyncStatus(status) {
     }
 }
 
+/**
+ * Iterates through the offline queue and resolves conflicts with remote data interactively.
+ * @param {import('../../core/schema.js').Expense[]} remoteExpenses
+ * @param {import('../../core/schema.js').SyncQueueItem[]} queue
+ * @param {Date|null} lastSync
+ * @returns {Promise<import('../../core/schema.js').Expense[]>}
+ */
+async function resolveConflictQueue(remoteExpenses, queue, lastSync) {
+    let resolvedList = [...remoteExpenses];
+
+    for (const item of queue) {
+        if (item.action === 'delete' && item.id === 'all') {
+            resolvedList = [];
+            continue;
+        }
+
+        const remoteItem = resolvedList.find(e => String(e.id) === String(item.id));
+
+        if (item.action === 'add') {
+            if (remoteItem) {
+                // Added on both sides: compare fields
+                const localFields = JSON.stringify({ ...item.expense, timestamp: '' });
+                const remoteFields = JSON.stringify({ ...remoteItem, timestamp: '' });
+                if (localFields !== remoteFields) {
+                    const keepLocal = await dialog.confirm({
+                        title: 'Sync Conflict (Add)',
+                        message: `A transaction was added on both devices with matching ID.\n\n` +
+                                 `Local: ${item.expense.category} (${item.expense.subcategory}) - $${item.expense.amount} on ${item.expense.date}\n` +
+                                 `Cloud: ${remoteItem.category} (${remoteItem.subcategory}) - $${remoteItem.amount} on ${remoteItem.date}\n\n` +
+                                 `Keep your local version?`,
+                        confirmText: 'Keep Local',
+                        cancelText: 'Use Cloud',
+                        tone: 'warn'
+                    });
+                    if (keepLocal) {
+                        resolvedList = resolvedList.map(e => String(e.id) === String(item.id) ? item.expense : e);
+                    }
+                }
+            } else {
+                resolvedList.push(item.expense);
+            }
+        } else if (item.action === 'update') {
+            if (remoteItem) {
+                const localFields = JSON.stringify({ ...item.expense, timestamp: '' });
+                const remoteFields = JSON.stringify({ ...remoteItem, timestamp: '' });
+                if (localFields !== remoteFields) {
+                    // Check if cloud version changed since last sync
+                    const remoteModifiedTime = remoteItem.timestamp ? new Date(remoteItem.timestamp) : null;
+                    const remoteChanged = lastSync && remoteModifiedTime && remoteModifiedTime > lastSync;
+
+                    if (remoteChanged) {
+                        const keepLocal = await dialog.confirm({
+                            title: 'Sync Conflict (Edit)',
+                            message: `Transaction was edited on both devices since last sync.\n\n` +
+                                     `Local: ${item.expense.category} - $${item.expense.amount} on ${item.expense.date} (${item.expense.description || 'no note'})\n` +
+                                     `Cloud: ${remoteItem.category} - $${remoteItem.amount} on ${remoteItem.date} (${remoteItem.description || 'no note'})\n\n` +
+                                     `Keep your local version?`,
+                            confirmText: 'Keep Local',
+                            cancelText: 'Use Cloud',
+                            tone: 'warn'
+                        });
+                        if (keepLocal) {
+                            resolvedList = resolvedList.map(e => String(e.id) === String(item.id) ? item.expense : e);
+                        }
+                    } else {
+                        // Only modified locally, auto-apply local edit
+                        resolvedList = resolvedList.map(e => String(e.id) === String(item.id) ? item.expense : e);
+                    }
+                }
+            } else {
+                // Deleted in cloud, edited locally
+                const restore = await dialog.confirm({
+                    title: 'Sync Conflict (Deleted on Cloud)',
+                    message: `Transaction (${item.expense.category} - $${item.expense.amount}) was deleted from the cloud but modified locally.\n\n` +
+                             `Restore this transaction?`,
+                    confirmText: 'Restore',
+                    cancelText: 'Keep Deleted',
+                    tone: 'warn'
+                });
+                if (restore) {
+                    resolvedList.push(item.expense);
+                }
+            }
+        } else if (item.action === 'delete') {
+            if (remoteItem) {
+                // Deleted locally: check if edited in cloud since last sync
+                const remoteModifiedTime = remoteItem.timestamp ? new Date(remoteItem.timestamp) : null;
+                const remoteChanged = lastSync && remoteModifiedTime && remoteModifiedTime > lastSync;
+
+                if (remoteChanged) {
+                    const keepCloud = await dialog.confirm({
+                        title: 'Sync Conflict (Deleted Locally)',
+                        message: `Transaction was deleted locally but edited on another device.\n\n` +
+                                 `Cloud: ${remoteItem.category} - $${remoteItem.amount} on ${remoteItem.date}\n\n` +
+                                 `Keep the Cloud version?`,
+                        confirmText: 'Keep Cloud',
+                        cancelText: 'Keep Delete',
+                        tone: 'warn'
+                    });
+                    if (!keepCloud) {
+                        resolvedList = resolvedList.filter(e => String(e.id) !== String(item.id));
+                    }
+                } else {
+                    // Only deleted locally, auto-apply delete
+                    resolvedList = resolvedList.filter(e => String(e.id) !== String(item.id));
+                }
+            }
+        }
+    }
+    return resolvedList;
+}
+
 /** Pull all data from the cloud backend into the store. */
 export async function pullFromCloud() {
     if (!storage.isCloud() || isSyncing) return;
@@ -65,14 +193,26 @@ export async function pullFromCloud() {
     try {
         const data = await storage.pullAll();
         if (data) {
-            // Replace unconditionally — empty sheet ⇒ empty local copy.
             const incoming = Array.isArray(data.expenses) ? data.expenses : [];
-            const expenses = incoming.map(exp => {
+            const remoteExpenses = incoming.map(exp => {
                 if (exp.date) exp.date = normalizeDateString(exp.date);
                 return exp;
             });
-            localStorage.setItem('expenses', JSON.stringify(expenses));
-            store.update({ expenses }, EVENTS.EXPENSES_CHANGED);
+
+            const queue = getQueue();
+            let finalExpenses = remoteExpenses;
+            let wroteBackToCloud = false;
+
+            if (queue.length > 0) {
+                $log.info(`Sync queue has ${queue.length} items; starting conflict resolution`);
+                finalExpenses = await resolveConflictQueue(remoteExpenses, queue, lastSyncTime);
+                saveQueue([]); // Clear queue after successful resolution
+                wroteBackToCloud = true;
+            }
+
+            // Save the merged list locally
+            localStorage.setItem('expenses', JSON.stringify(finalExpenses));
+            store.update({ expenses: finalExpenses }, EVENTS.EXPENSES_CHANGED);
 
             // Settings
             const currentSettings = store.getState().settings;
@@ -99,9 +239,15 @@ export async function pullFromCloud() {
                 storage.saveCategories(currentCategories);
             }
             store.update({ categories }, EVENTS.CATEGORIES_CHANGED);
+
+            // If we processed offline changes, write the merged results back to Google Sheets
+            if (wroteBackToCloud) {
+                await storage.replaceAllExpenses(finalExpenses);
+                showToast('Offline sync resolved successfully!');
+            }
         }
 
-        lastSyncTime = new Date();
+        setLastSyncTime(new Date());
         updateSyncStatus('synced');
     } catch (err) {
         $log.error('pull failed', err);
@@ -118,7 +264,8 @@ export async function pushAllToCloud() {
     try {
         const { expenses, settings, categories } = store.getState();
         await storage.pushAll({ expenses, settings, categories });
-        lastSyncTime = new Date();
+        saveQueue([]); // Clear any pending sync items if wholesale overwrite succeeds
+        setLastSyncTime(new Date());
         updateSyncStatus('synced');
     } catch (err) {
         $log.error('push failed', err);
@@ -135,5 +282,13 @@ export function mount() {
     // Mirror sync errors / status pings emitted via the store (future).
     store.subscribe(EVENTS.SYNC_STATUS_CHANGED, (state) => {
         if (state?.syncStatus) updateSyncStatus(state.syncStatus);
+    });
+
+    // Auto-sync when returning online
+    window.addEventListener('online', () => {
+        if (storage.isCloud()) {
+            $log.info('Connection restored; auto-syncing');
+            pullFromCloud();
+        }
     });
 }
