@@ -22,6 +22,7 @@ export const SCHEMA_VERSION = 1;
  * @property {number}    amount       Positive number. Sign is implied by `type`.
  * @property {string}    description  Free-text note. May be empty.
  * @property {string}    currency     ISO code, e.g. 'USD'. Must exist in CURRENCIES.
+ * @property {string}    timestamp    ISO string of creation or modification.
  */
 
 /**
@@ -52,6 +53,14 @@ export const SCHEMA_VERSION = 1;
  */
 
 /**
+ * @typedef {object} SyncQueueItem
+ * @property {'add' | 'update' | 'delete'} action
+ * @property {string} id
+ * @property {Expense} [expense]
+ * @property {string} timestamp
+ */
+
+/**
  * @typedef {object} AppState
  * @property {Expense[]}         expenses
  * @property {Categories}        categories
@@ -61,6 +70,7 @@ export const SCHEMA_VERSION = 1;
  * @property {number|null}       lastSyncTime  ms epoch
  * @property {'guest'|'google'|null} authMode
  * @property {FilterState}       filters
+ * @property {SyncQueueItem[]}   syncQueue
  */
 
 /**

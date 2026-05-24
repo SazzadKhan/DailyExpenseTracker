@@ -11,6 +11,7 @@ export const EVENTS = Object.freeze({
     FILTERS_CHANGED:    'filters:changed',
     USER_CHANGED:       'user:changed',
     SYNC_STATUS_CHANGED:'sync:changed',
+    SYNC_QUEUE_CHANGED: 'sync:queue:changed',
 
     /** UI-only events (not part of persistent state). */
     TOAST:              'ui:toast',

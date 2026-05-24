@@ -8,6 +8,7 @@
 
 import { store } from '../../core/store.js';
 import { EVENTS } from '../../core/events.js';
+import { STORAGE_KEYS } from '../../core/constants.js';
 import { saveExpenses } from '../../services/local-store.js';
 import { storage } from '../../services/storage.js';
 import { log } from '../../core/log.js';
@@ -20,14 +21,44 @@ import {
 } from './expenses.model.js';
 
 /** @typedef {import('../../core/schema.js').Expense} Expense */
+/** @typedef {import('../../core/schema.js').SyncQueueItem} SyncQueueItem */
 
 const $log = log('expenses/actions');
 
-function commit(nextList, cloudOp) {
+export function getQueue() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEYS.SYNC_QUEUE);
+        return raw ? JSON.parse(raw) : [];
+    } catch (_) {
+        return [];
+    }
+}
+
+export function saveQueue(queue) {
+    try {
+        localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(queue));
+    } catch (_) {}
+    store.update({ syncQueue: queue }, EVENTS.SYNC_QUEUE_CHANGED);
+}
+
+export function addToQueue(item) {
+    if (!storage.isCloud()) return;
+    const queue = getQueue();
+    queue.push(item);
+    saveQueue(queue);
+}
+
+function commit(nextList, cloudOp, queueItem = null) {
     store.update({ expenses: nextList }, EVENTS.EXPENSES_CHANGED);
     saveExpenses(nextList);
-    try { if (typeof cloudOp === 'function') cloudOp(); }
-    catch (err) { $log.warn('cloud sync failed (local already saved)', err); }
+    if (typeof cloudOp === 'function') {
+        Promise.resolve(cloudOp()).catch(err => {
+            $log.warn('cloud sync failed (local already saved), adding to queue', err);
+            if (queueItem) {
+                addToQueue(queueItem);
+            }
+        });
+    }
     return nextList;
 }
 
@@ -46,7 +77,13 @@ export function add(input, opts = {}) {
     if (!v.ok) return v;
 
     const list = modelAdd(s.expenses, v.expense);
-    commit(list, () => storage.addExpense(v.expense));
+    const queueItem = {
+        action: 'add',
+        id: v.expense.id,
+        expense: v.expense,
+        timestamp: v.expense.timestamp
+    };
+    commit(list, () => storage.addExpense(v.expense), queueItem);
     return { ok: true, expense: v.expense, list };
 }
 
@@ -58,14 +95,21 @@ export function add(input, opts = {}) {
  */
 export function update(input, opts = {}) {
     const s = store.getState();
-    const v = validateExpense(input, {
+    const inputWithTimestamp = { ...input, timestamp: new Date().toISOString() };
+    const v = validateExpense(inputWithTimestamp, {
         defaultCurrency: s.settings?.currency,
         isIncomeCategory: opts.isIncomeCategory
     });
     if (!v.ok) return v;
 
     const list = modelUpdate(s.expenses, v.expense);
-    commit(list, () => storage.updateExpense(v.expense));
+    const queueItem = {
+        action: 'update',
+        id: v.expense.id,
+        expense: v.expense,
+        timestamp: v.expense.timestamp
+    };
+    commit(list, () => storage.updateExpense(v.expense), queueItem);
     return { ok: true, expense: v.expense, list };
 }
 
@@ -77,7 +121,12 @@ export function update(input, opts = {}) {
 export function remove(id) {
     const s = store.getState();
     const list = modelDelete(s.expenses, id);
-    commit(list, () => storage.deleteExpense(String(id)));
+    const queueItem = {
+        action: 'delete',
+        id: String(id),
+        timestamp: new Date().toISOString()
+    };
+    commit(list, () => storage.deleteExpense(String(id)), queueItem);
     return list;
 }
 
@@ -87,7 +136,12 @@ export function remove(id) {
  */
 export function removeAll() {
     const list = modelDeleteAll();
-    commit(list, () => storage.deleteAllExpenses());
+    const queueItem = {
+        action: 'delete',
+        id: 'all',
+        timestamp: new Date().toISOString()
+    };
+    commit(list, () => storage.deleteAllExpenses(), queueItem);
     return list;
 }
 

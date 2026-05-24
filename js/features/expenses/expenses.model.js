@@ -114,7 +114,8 @@ export function validateExpense(input, opts = {}) {
         subcategory,
         amount,
         description: String(input.description || '').trim(),
-        currency: String(input.currency || opts.defaultCurrency || 'USD')
+        currency: String(input.currency || opts.defaultCurrency || 'USD'),
+        timestamp: String(input.timestamp || new Date().toISOString())
     };
     return { ok: true, expense };
 }

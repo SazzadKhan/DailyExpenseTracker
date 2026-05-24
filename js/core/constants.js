@@ -14,7 +14,9 @@ export const STORAGE_KEYS = Object.freeze({
     LAST_SIGNED_IN_EMAIL: 'lastSignedInEmail',
     SCHEMA_VERSION: 'schemaVersion',
     // expenseSheetId is namespaced per-email: `expenseSheetId:${email}`
-    SHEET_ID_PREFIX: 'expenseSheetId:'
+    SHEET_ID_PREFIX: 'expenseSheetId:',
+    LAST_SYNC_TIME: 'lastSyncTime',
+    SYNC_QUEUE: 'syncQueue'
 });
 
 /** Default settings applied for new users / when localStorage is empty. */
