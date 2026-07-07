@@ -11,6 +11,7 @@ import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS, STORAGE_KEYS } from '../../core/c
 import { storage } from '../../services/storage.js';
 import { dialog } from '../../services/dialog.js';
 import { pullFromCloud, pushAllToCloud, updateSyncStatus, getLastSyncTime } from '../sync/index.js';
+import { saveExpenses, saveSettings as persistSettings, saveCategories as persistCategories } from '../../services/local-store.js';
 import { log } from '../../core/log.js';
 
 const $log = log('auth');
@@ -54,9 +55,9 @@ export function wipeLocalData({ keepSettings = false } = {}) {
         : { ...DEFAULT_SETTINGS };
 
     try {
-        localStorage.setItem('expenses', '[]');
-        localStorage.setItem('categories', JSON.stringify(freshCategories));
-        if (!keepSettings) localStorage.setItem('settings', JSON.stringify(freshSettings));
+        saveExpenses([]);
+        persistCategories(freshCategories);
+        if (!keepSettings) persistSettings(freshSettings);
 
         // Drop every cached spreadsheet ID — they belong to specific accounts.
         const toRemove = [];

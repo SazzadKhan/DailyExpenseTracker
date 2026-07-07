@@ -6,6 +6,7 @@ import { DEFAULT_CATEGORIES, STORAGE_KEYS } from '../../core/constants.js';
 import { storage } from '../../services/storage.js';
 import { log } from '../../core/log.js';
 import { getQueue, saveQueue } from '../expenses/actions.js';
+import { saveExpenses, saveSettings as persistSettings, saveCategories as persistCategories } from '../../services/local-store.js';
 import { dialog } from '../../services/dialog.js';
 import { showToast } from '../../core/toast.js';
 
@@ -206,12 +207,11 @@ export async function pullFromCloud() {
             if (queue.length > 0) {
                 $log.info(`Sync queue has ${queue.length} items; starting conflict resolution`);
                 finalExpenses = await resolveConflictQueue(remoteExpenses, queue, lastSyncTime);
-                saveQueue([]); // Clear queue after successful resolution
                 wroteBackToCloud = true;
             }
 
             // Save the merged list locally
-            localStorage.setItem('expenses', JSON.stringify(finalExpenses));
+            saveExpenses(finalExpenses);
             store.update({ expenses: finalExpenses }, EVENTS.EXPENSES_CHANGED);
 
             // Settings
@@ -219,7 +219,7 @@ export async function pullFromCloud() {
             let settings = currentSettings;
             if (data.settings && Object.keys(data.settings).length > 0) {
                 settings = { ...currentSettings, ...data.settings };
-                localStorage.setItem('settings', JSON.stringify(settings));
+                persistSettings(settings);
             } else {
                 storage.saveSettings(currentSettings);
             }
@@ -234,7 +234,7 @@ export async function pullFromCloud() {
                     categories.Income = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES.Income));
                     storage.saveCategories(categories);
                 }
-                localStorage.setItem('categories', JSON.stringify(categories));
+                persistCategories(categories);
             } else {
                 storage.saveCategories(currentCategories);
             }
@@ -243,6 +243,7 @@ export async function pullFromCloud() {
             // If we processed offline changes, write the merged results back to Google Sheets
             if (wroteBackToCloud) {
                 await storage.replaceAllExpenses(finalExpenses);
+                saveQueue([]); // Only safe to drop the queue once the cloud write-back succeeded
                 showToast('Offline sync resolved successfully!');
             }
         }
@@ -259,7 +260,8 @@ export async function pullFromCloud() {
 
 /** Push the current store snapshot to the cloud backend. */
 export async function pushAllToCloud() {
-    if (!storage.isCloud()) return;
+    if (!storage.isCloud() || isSyncing) return;
+    isSyncing = true;
     updateSyncStatus('syncing');
     try {
         const { expenses, settings, categories } = store.getState();
@@ -270,6 +272,8 @@ export async function pushAllToCloud() {
     } catch (err) {
         $log.error('push failed', err);
         updateSyncStatus('error');
+    } finally {
+        isSyncing = false;
     }
 }
 
