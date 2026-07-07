@@ -81,6 +81,20 @@
             </p>
         </div>
     </div>
+    <script>
+        // Decide synchronously whether to show the landing/sign-in overlay,
+        // so the user doesn't see the app paint and then get covered by it.
+        // The async auth init in js/main.js will hide/show as appropriate.
+        (function () {
+            try {
+                if (!localStorage.getItem('authMode')) {
+                    var ov = document.getElementById('landing-overlay');
+                    if (ov) ov.hidden = false;
+                    document.body.classList.add('landing-open');
+                }
+            } catch (_) { /* localStorage may be unavailable */ }
+        })();
+    </script>
 
     <div class="app-container">
         <!-- Header -->

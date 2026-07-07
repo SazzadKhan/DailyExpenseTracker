@@ -391,6 +391,7 @@ async function initAuthAndStorage() {
 
     if (!configured) {
         setAuthMode('guest');
+        hideLanding();
         renderAuthUi();
         return;
     }
