@@ -38,10 +38,15 @@
             from '../js/core/format.js';
         import { store } from '../js/core/store.js';
         import { EVENTS } from '../js/core/events.js';
+        import { sameExpense, resolveConflictQueue } from '../js/features/sync/sync.model.js';
 
         const results = [];
         function t(name, fn) {
             try { fn(); results.push({ name, ok: true }); }
+            catch (err) { results.push({ name, ok: false, err: String(err) }); }
+        }
+        async function tAsync(name, fn) {
+            try { await fn(); results.push({ name, ok: true }); }
             catch (err) { results.push({ name, ok: false, err: String(err) }); }
         }
         function assertEq(actual, expected, msg = '') {
@@ -298,20 +303,141 @@
         });
 
         // ---- render --------
-        const summary = document.getElementById('summary');
-        const ol = document.getElementById('results');
-        const failed = results.filter(r => !r.ok);
-        summary.innerHTML = failed.length === 0
-            ? `<span class="ok">✓ ${results.length}/${results.length} passed</span>`
-            : `<span class="fail">✗ ${failed.length} failed</span> · ${results.length - failed.length} passed`;
+        function renderResults() {
+            const summary = document.getElementById('summary');
+            const ol = document.getElementById('results');
+            const failed = results.filter(r => !r.ok);
+            summary.innerHTML = failed.length === 0
+                ? `<span class="ok">✓ ${results.length}/${results.length} passed</span>`
+                : `<span class="fail">✗ ${failed.length} failed</span> · ${results.length - failed.length} passed`;
 
-        for (const r of results) {
-            const li = document.createElement('li');
-            li.innerHTML = r.ok
-                ? `<span class="ok">✓</span> ${r.name}`
-                : `<span class="fail">✗</span> ${r.name}<div class="fail-detail">${r.err.replace(/</g,'&lt;')}</div>`;
-            ol.appendChild(li);
+            for (const r of results) {
+                const li = document.createElement('li');
+                li.innerHTML = r.ok
+                    ? `<span class="ok">✓</span> ${r.name}`
+                    : `<span class="fail">✗</span> ${r.name}<div class="fail-detail">${r.err.replace(/</g,'&lt;')}</div>`;
+                ol.appendChild(li);
+            }
         }
+
+        (async () => {
+            // ---- sync.model ----
+            function confirmCounter(answer) {
+                const fn = async () => { fn.calls++; return answer; };
+                fn.calls = 0;
+                return fn;
+            }
+
+            await tAsync('sameExpense: identical record, different key order', async () => {
+                const a = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: 'Coffee & Snacks', amount: 5, description: 'latte', currency: 'USD', timestamp: 't1' };
+                const b = { date: today, category: 'Food & Dining', id: '1', subcategory: 'Coffee & Snacks', currency: 'USD', amount: 5, timestamp: 't2', description: 'latte', type: 'expense' };
+                assertEq(sameExpense(a, b), true);
+            });
+            await tAsync('sameExpense: id number vs string, amount number vs string', async () => {
+                const a = { id: 123, type: 'expense', date: today, category: 'Shopping', subcategory: '', amount: 12.5, description: '', currency: 'USD' };
+                const b = { id: '123', type: 'expense', date: today, category: 'Shopping', subcategory: '', amount: '12.5', description: '', currency: 'USD' };
+                assertEq(sameExpense(a, b), true);
+                assertEq(sameExpense(a, { ...b, amount: '99' }), false);
+            });
+            await tAsync('sameExpense: legacy remote type "" matches via effectiveType', async () => {
+                const a = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD' };
+                const b = { id: '1', type: '', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD' };
+                assertEq(sameExpense(a, b), true);
+            });
+            await tAsync('resolveConflictQueue: add matching remote → no confirm, no duplicate', async () => {
+                const confirmFn = confirmCounter(true);
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD', timestamp: 't1' }];
+                const queue = [{ action: 'add', id: '1', expense: { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD' } }];
+                const out = await resolveConflictQueue(remote, queue, null, confirmFn);
+                assertEq(confirmFn.calls, 0);
+                assertEq(out.length, 1);
+            });
+            await tAsync('resolveConflictQueue: add same id different amount → confirm called', async () => {
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD', timestamp: 't1' }];
+                const local = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 99, description: '', currency: 'USD' };
+                const queue = [{ action: 'add', id: '1', expense: local }];
+
+                const keepLocal = confirmCounter(true);
+                const outLocal = await resolveConflictQueue(remote, queue, null, keepLocal);
+                assertEq(keepLocal.calls, 1);
+                assertEq(outLocal.find(e => e.id === '1').amount, 99);
+
+                const keepCloud = confirmCounter(false);
+                const outCloud = await resolveConflictQueue(remote, queue, null, keepCloud);
+                assertEq(keepCloud.calls, 1);
+                assertEq(outCloud.find(e => e.id === '1').amount, 5);
+            });
+            await tAsync('resolveConflictQueue: update, remote untouched since lastSync → auto-applies local', async () => {
+                const lastSync = new Date(Date.now() - 60000);
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'old', currency: 'USD', timestamp: new Date(Date.now() - 120000).toISOString() }];
+                const local = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'new', currency: 'USD' };
+                const queue = [{ action: 'update', id: '1', expense: local }];
+                const confirmFn = confirmCounter(true);
+                const out = await resolveConflictQueue(remote, queue, lastSync, confirmFn);
+                assertEq(confirmFn.calls, 0);
+                assertEq(out.find(e => e.id === '1').description, 'new');
+            });
+            await tAsync('resolveConflictQueue: update, remote newer than lastSync → confirm called', async () => {
+                const lastSync = new Date(Date.now() - 60000);
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'cloud-edit', currency: 'USD', timestamp: new Date().toISOString() }];
+                const local = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'local-edit', currency: 'USD' };
+                const queue = [{ action: 'update', id: '1', expense: local }];
+
+                const keepLocal = confirmCounter(true);
+                const outLocal = await resolveConflictQueue(remote, queue, lastSync, keepLocal);
+                assertEq(keepLocal.calls, 1);
+                assertEq(outLocal.find(e => e.id === '1').description, 'local-edit');
+
+                const keepCloud = confirmCounter(false);
+                const outCloud = await resolveConflictQueue(remote, queue, lastSync, keepCloud);
+                assertEq(keepCloud.calls, 1);
+                assertEq(outCloud.find(e => e.id === '1').description, 'cloud-edit');
+            });
+            await tAsync('resolveConflictQueue: update whose id missing remotely → confirm called', async () => {
+                const local = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD' };
+                const queue = [{ action: 'update', id: '1', expense: local }];
+
+                const restore = confirmCounter(true);
+                const outRestore = await resolveConflictQueue([], queue, null, restore);
+                assertEq(restore.calls, 1);
+                assertEq(outRestore.length, 1);
+
+                const stayDeleted = confirmCounter(false);
+                const outDeleted = await resolveConflictQueue([], queue, null, stayDeleted);
+                assertEq(stayDeleted.calls, 1);
+                assertEq(outDeleted.length, 0);
+            });
+            await tAsync('resolveConflictQueue: delete, remote edited after lastSync → confirm called', async () => {
+                const lastSync = new Date(Date.now() - 60000);
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD', timestamp: new Date().toISOString() }];
+                const queue = [{ action: 'delete', id: '1' }];
+
+                const keepDelete = confirmCounter(false);
+                const outDeleted = await resolveConflictQueue(remote, queue, lastSync, keepDelete);
+                assertEq(keepDelete.calls, 1);
+                assertEq(outDeleted.length, 0);
+
+                const keepCloud = confirmCounter(true);
+                const outKept = await resolveConflictQueue(remote, queue, lastSync, keepCloud);
+                assertEq(keepCloud.calls, 1);
+                assertEq(outKept.length, 1);
+            });
+            await tAsync('resolveConflictQueue: delete/all keeps entries created after wipe timestamp', async () => {
+                const wipeTime = new Date(Date.now() - 60000).toISOString();
+                const remote = [
+                    { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'before wipe', currency: 'USD', timestamp: new Date(Date.now() - 120000).toISOString() },
+                    { id: '2', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'after wipe', currency: 'USD', timestamp: new Date().toISOString() }
+                ];
+                const queue = [{ action: 'delete', id: 'all', timestamp: wipeTime }];
+                const confirmFn = confirmCounter(true);
+                const out = await resolveConflictQueue(remote, queue, null, confirmFn);
+                assertEq(confirmFn.calls, 0);
+                assertEq(out.length, 1);
+                assertEq(out[0].id, '2');
+            });
+
+            renderResults();
+        })();
     </script>
 </body>
 </html>
