@@ -263,6 +263,7 @@ function onConfirm(_ev, btn) {
             : 'Nothing added.'),
         ...errors.map(t => el('p', { class: 'xbot-error' }, t))
     );
+    card.remove();
 }
 
 function onCancel(_ev, btn) {
@@ -274,6 +275,7 @@ function onCancel(_ev, btn) {
     markOutcome(rec.logId, { cancelled: true });
     pending.delete(id);
     addBubble('bot', el('p', {}, 'Okay, nothing saved.'));
+    card.remove();
 }
 
 function disablePreview(card) {
