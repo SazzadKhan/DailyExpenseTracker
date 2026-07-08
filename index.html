@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="css/components/emoji-picker.css">
     <link rel="stylesheet" href="css/components/dialog.css">
     <link rel="stylesheet" href="css/components/effects.css">
+    <link rel="stylesheet" href="css/components/assistant.css">
     <link rel="stylesheet" href="css/components/vision-hero.css">
     <link rel="stylesheet" href="categories.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -396,6 +397,7 @@
                 <button class="settings-tab active" data-tab="general">🎨 General</button>
                 <button class="settings-tab" data-tab="budget">🔔 Alerts</button>
                 <button class="settings-tab" data-tab="data">💾 Data</button>
+                <button class="settings-tab" data-tab="assistant">🤖 Assistant</button>
             </div>
 
             <!-- General Tab (Currency & Theme) -->
@@ -473,6 +475,30 @@
                         <label for="enable-notifications">Enable income alerts</label>
                     </div>
                     <button class="btn-save" id="save-budget">💾 Save Income Settings</button>
+                </div>
+            </div>
+
+            <!-- Assistant Tab (XpenseBot) -->
+            <div class="settings-content hidden" id="assistant-tab">
+                <h4>XpenseBot Assistant</h4>
+                <div class="settings-group">
+                    <div class="form-group">
+                        <label for="assistant-provider">AI provider</label>
+                        <select id="assistant-provider">
+                            <option value="anthropic">Anthropic (Claude)</option>
+                            <option value="openai">OpenAI</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="assistant-model">Model</label>
+                        <input type="text" id="assistant-model" placeholder="claude-opus-4-8" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="assistant-api-key">API key</label>
+                        <input type="password" id="assistant-api-key" placeholder="Paste your API key" autocomplete="off">
+                        <small>Key stays in this browser — never synced to your Sheet. Leave empty to use the free offline parser.</small>
+                    </div>
+                    <button class="btn-save" id="assistant-save-btn">💾 Save Assistant Settings</button>
                 </div>
             </div>
                 </section>
@@ -812,6 +838,21 @@
             <span class="nav-label">Profile</span>
         </button>
     </nav>
+
+    <!-- XpenseBot assistant: floating button + chat panel -->
+    <button id="xpensebot-fab" title="XpenseBot assistant" aria-label="Open assistant">💬</button>
+    <div id="xpensebot-panel" hidden>
+        <div class="xbot-header">
+            <span class="xbot-title">🤖 XpenseBot</span>
+            <button id="xpensebot-close" aria-label="Close assistant">✕</button>
+        </div>
+        <div id="xpensebot-banner"></div>
+        <div id="xpensebot-messages" aria-live="polite"></div>
+        <div class="xbot-composer">
+            <input id="xpensebot-input" type="text" placeholder="e.g. lunch 150, rickshaw 40" autocomplete="off">
+            <button id="xpensebot-send">Send</button>
+        </div>
+    </div>
 
     <script type="module" src="js/main.js"></script>
 </body>

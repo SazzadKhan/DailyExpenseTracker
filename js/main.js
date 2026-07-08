@@ -24,6 +24,7 @@ import { mount as mountSync } from './features/sync/index.js';
 import { mount as mountAuth } from './features/auth/index.js';
 import { mount as mountNavigation } from './features/navigation/index.js';
 import { mount as mountEffects } from './features/effects/index.js';
+import { mount as mountAssistant } from './features/assistant/index.js';
 
 const $log = log('main');
 
@@ -59,6 +60,7 @@ function boot() {
     mountAuth();
     mountNavigation();
     mountEffects();
+    mountAssistant();
     $log.info('booted; modular features mounted');
 }
 

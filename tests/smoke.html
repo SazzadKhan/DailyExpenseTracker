@@ -39,6 +39,8 @@
         import { store } from '../js/core/store.js';
         import { EVENTS } from '../js/core/events.js';
         import { sameExpense, resolveConflictQueue } from '../js/features/sync/sync.model.js';
+        import { parse } from '../js/features/assistant/parser.js';
+        import { DEFAULT_CATEGORIES } from '../js/core/constants.js';
 
         const results = [];
         function t(name, fn) {
@@ -434,6 +436,111 @@
                 assertEq(confirmFn.calls, 0);
                 assertEq(out.length, 1);
                 assertEq(out[0].id, '2');
+            });
+
+            // ---- assistant parser (XpenseBot) --------------------------------
+            // Corpus rule: ≥85% of these must parse exactly; everything else
+            // must fail SAFELY (needsReview/unmatched), never a silent wrong entry.
+            const pctx = { categories: DEFAULT_CATEGORIES, todayStr: today, currencyCode: 'BDT' };
+            const dayShift = (n) => {
+                const [y, m, d] = today.split('-').map(Number);
+                return getLocalDateString(new Date(y, m - 1, d - n));
+            };
+            const yesterday = dayShift(1);
+            const lastMonday = (() => {
+                const [y, m, d] = today.split('-').map(Number);
+                const diff = (new Date(y, m - 1, d).getDay() - 1 + 7) % 7;
+                return dayShift(diff);
+            })();
+
+            t('parser: multi-entry, trailing date word applies to all', () => {
+                const { entries, unmatched } = parse('lunch 150, rickshaw 40, tea 20 yesterday', pctx);
+                assertEq(entries.length, 3);
+                assertEq(unmatched.length, 0);
+                assertEq(entries.map(e => e.amount), [150, 40, 20]);
+                assertEq(entries.every(e => e.date === yesterday), true, 'all dated yesterday');
+                assertEq(entries[0].category, 'Food & Dining');
+                assertEq(entries[1].category, 'Transportation');
+            });
+            t('parser: salary → Income›Salary, no review flag', () => {
+                const { entries } = parse('salary 30000', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].category, 'Income');
+                assertEq(entries[0].subcategory, 'Salary');
+                assertEq(entries[0].needsReview, false);
+            });
+            t('parser: weekday resolves to most recent occurrence', () => {
+                const { entries } = parse('groceries 900 monday', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].date, lastMonday);
+                assertEq(entries[0].subcategory, 'Groceries');
+            });
+            t('parser: thousand-separator comma is not a split point', () => {
+                const { entries } = parse('rent 1,200', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 1200);
+                assertEq(entries[0].subcategory, 'Rent/Mortgage');
+            });
+            t('parser: "and" splits when both sides have amounts', () => {
+                const { entries } = parse('tea 20 and bus 50', pctx);
+                assertEq(entries.length, 2);
+                assertEq(entries[1].category, 'Transportation');
+            });
+            t('parser: "and" kept whole when one side has no amount', () => {
+                const { entries } = parse('lunch and coffee with client for 450', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 450);
+            });
+            t('parser: three-way "and" chain with amounts splits into 3', () => {
+                const { entries } = parse('groceries 500 and fish 350 from agora and paid internet bill 1200', pctx);
+                assertEq(entries.length, 3);
+                assertEq(entries[0].subcategory, 'Groceries');
+                assertEq(entries[2].subcategory, 'Internet');
+            });
+            t('parser: Bengali digits normalize', () => {
+                const { entries } = parse('৫০ rickshaw', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 50);
+                assertEq(entries[0].category, 'Transportation');
+            });
+            t('parser: "50k" shorthand → 50000', () => {
+                const { entries } = parse('salary 50k', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 50000);
+            });
+            t('parser: unknown word falls back to Other with review flag', () => {
+                const { entries } = parse('zzqx 75', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].category, 'Other');
+                assertEq(entries[0].needsReview, true);
+            });
+            t('parser: no amount → unmatched, never an invented entry', () => {
+                const { entries, unmatched } = parse('hello there', pctx);
+                assertEq(entries.length, 0);
+                assertEq(unmatched.length, 1);
+            });
+            t('parser: month names not parsed — today, text kept in description', () => {
+                const { entries } = parse('internet bill 1200 for july', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].date, today);
+                assertEq(entries[0].subcategory, 'Internet');
+                assert(entries[0].description.toLowerCase().includes('july'), 'description keeps "july"');
+            });
+            t('parser: refund forces review flag (financial-meaning ambiguity)', () => {
+                const { entries } = parse('refund 500', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].needsReview, true);
+            });
+            t('parser: foreign currency symbol flags review (BDT settings)', () => {
+                const { entries } = parse('lunch $12', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 12);
+                assertEq(entries[0].needsReview, true);
+            });
+            t('parser: emoji-only text still yields a safe entry', () => {
+                const { entries } = parse('🍔 350', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 350);
             });
 
             renderResults();

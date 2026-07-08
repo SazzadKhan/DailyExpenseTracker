@@ -1,0 +1,245 @@
+/* css/components/assistant.css
+   XpenseBot chat assistant: floating action button + slide-up panel.
+   Uses tokens.css variables so all themes work. z-index sits above
+   .bottom-nav (1000) and below effects (10000) / dialog (11000). */
+
+#xpensebot-fab {
+    position: fixed;
+    right: 16px;
+    bottom: 84px; /* clears the fixed bottom nav on mobile */
+    width: 52px;
+    height: 52px;
+    border: none;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 24px;
+    line-height: 1;
+    box-shadow: var(--shadow-lg);
+    cursor: pointer;
+    z-index: 1100;
+    transition: var(--transition);
+}
+#xpensebot-fab:hover {
+    background: var(--primary-dark);
+    transform: scale(1.06);
+}
+
+#xpensebot-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    max-height: 70dvh;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: var(--shadow-xl);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+#xpensebot-panel[hidden] {
+    display: none;
+}
+
+.xbot-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+}
+.xbot-title {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+#xpensebot-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+#xpensebot-close:hover {
+    color: var(--text-primary);
+}
+
+#xpensebot-banner {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+}
+#xpensebot-banner:empty {
+    display: none;
+}
+#xpensebot-banner.xbot-banner-pro {
+    color: var(--secondary);
+}
+#xpensebot-banner.xbot-banner-expired {
+    color: var(--warning);
+}
+
+#xpensebot-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 120px;
+}
+
+.xbot-bubble {
+    max-width: 88%;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+.xbot-bubble p {
+    margin: 0 0 4px;
+}
+.xbot-bubble p:last-child {
+    margin-bottom: 0;
+}
+.xbot-user {
+    align-self: flex-end;
+    background: var(--primary);
+    color: #fff;
+}
+.xbot-bot {
+    align-self: flex-start;
+    background: var(--bg-input);
+}
+.xbot-typing {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+.xbot-error {
+    color: var(--danger);
+}
+.xbot-note {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* Preview rows (checkbox + entry summary) */
+.xbot-entry-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 0;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    flex-wrap: wrap;
+}
+.xbot-entry-row input[type="checkbox"] {
+    accent-color: var(--primary);
+}
+.xbot-entry-main {
+    font-weight: 500;
+}
+.xbot-entry-meta {
+    color: var(--text-secondary);
+    font-size: 12px;
+    flex-basis: 100%;
+    padding-left: 24px;
+}
+.xbot-review .xbot-entry-main {
+    color: var(--warning);
+}
+
+.xbot-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.xbot-actions button {
+    flex: 1;
+    padding: 6px 10px;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+}
+.xbot-btn-confirm {
+    background: var(--secondary);
+    color: #fff;
+}
+.xbot-btn-cancel {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.xbot-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.xbot-license-input {
+    width: 100%;
+    margin: 6px 0;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+.xbot-composer {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+}
+#xpensebot-input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 14px;
+}
+#xpensebot-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+#xpensebot-send {
+    padding: 8px 14px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--primary);
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+}
+#xpensebot-send:hover {
+    background: var(--primary-dark);
+}
+#xpensebot-send:disabled,
+#xpensebot-input:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* Desktop: FAB in the corner, panel as an anchored card */
+@media (min-width: 769px) {
+    #xpensebot-fab {
+        right: 24px;
+        bottom: 24px;
+    }
+    #xpensebot-panel {
+        left: auto;
+        right: 24px;
+        bottom: 88px;
+        width: 380px;
+        max-height: 560px;
+        border-radius: var(--radius-lg);
+    }
+}
