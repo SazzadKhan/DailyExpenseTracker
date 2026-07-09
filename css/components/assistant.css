@@ -13,12 +13,40 @@
     border-radius: 50%;
     background: var(--primary);
     color: #fff;
-    font-size: 24px;
     line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     box-shadow: var(--shadow-lg);
     cursor: pointer;
     z-index: 1100;
     transition: var(--transition);
+}
+
+.xbot-mascot {
+    display: inline-flex;
+    color: currentColor;
+}
+.xbot-mascot svg {
+    display: block;
+}
+.xbot-mascot-fab svg {
+    width: 26px;
+    height: 26px;
+}
+.xbot-mascot-header svg {
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    vertical-align: -3px;
+}
+.xbot-mascot-bubble {
+    color: var(--primary);
+    flex-shrink: 0;
+}
+.xbot-mascot-bubble svg {
+    width: 20px;
+    height: 20px;
 }
 #xpensebot-fab:hover {
     background: var(--primary-dark);
@@ -116,6 +144,14 @@
 .xbot-bot {
     align-self: flex-start;
     background: var(--bg-input);
+}
+.xbot-bubble-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.xbot-bubble-inner > div {
+    min-width: 0;
 }
 .xbot-typing {
     color: var(--text-secondary);

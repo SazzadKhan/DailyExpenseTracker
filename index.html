@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="css/components/dialog.css">
     <link rel="stylesheet" href="css/components/effects.css">
     <link rel="stylesheet" href="css/components/assistant.css">
+    <link rel="stylesheet" href="css/components/capture.css">
     <link rel="stylesheet" href="css/components/vision-hero.css">
     <link rel="stylesheet" href="categories.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -175,6 +176,18 @@
         <main class="main-content">
             <!-- Dashboard Page (Home) - Active by default -->
             <div class="nav-page active" data-page="dashboard">
+                <!-- Quick-capture box: type the day's spending in one line -->
+                <section class="capture-box" id="capture-box" aria-label="Quick add">
+                    <label class="capture-label" for="capture-input">📝 What did you spend today?</label>
+                    <textarea id="capture-input" class="capture-input" rows="2"
+                        placeholder="breakfast 120, rickshaw 50, gas bill 800 … got paid 20k"></textarea>
+                    <div class="capture-actions">
+                        <span class="capture-hint">One line, comma-separated. I’ll log them and flag anything to check.</span>
+                        <button type="button" id="capture-submit" class="capture-submit">Log it</button>
+                    </div>
+                    <div id="capture-receipt" class="capture-receipt" hidden></div>
+                </section>
+
                 <div class="dashboard-grid">
                     <section class="analytics-group">
                         <div class="analytics-group-header">
@@ -840,10 +853,10 @@
     </nav>
 
     <!-- XpenseBot assistant: floating button + chat panel -->
-    <button id="xpensebot-fab" title="XpenseBot assistant" aria-label="Open assistant">💬</button>
+    <button id="xpensebot-fab" title="XpenseBot assistant" aria-label="Open assistant"></button>
     <div id="xpensebot-panel" hidden>
         <div class="xbot-header">
-            <span class="xbot-title">🤖 XpenseBot</span>
+            <span class="xbot-title" id="xpensebot-title-mascot">XpenseBot</span>
             <button id="xpensebot-close" aria-label="Close assistant">✕</button>
         </div>
         <div id="xpensebot-banner"></div>

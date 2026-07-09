@@ -24,7 +24,8 @@ export const STORAGE_KEYS = Object.freeze({
     ASSISTANT_MODEL: 'assistantModel',
     ASSISTANT_TRIAL_START: 'assistantTrialStart',
     ASSISTANT_LICENSE_KEY: 'assistantLicenseKey',
-    ASSISTANT_LOG: 'assistantLog'
+    ASSISTANT_LOG: 'assistantLog',
+    ASSISTANT_ONBOARDED: 'assistantOnboarded'
 });
 
 /** Default settings applied for new users / when localStorage is empty. */

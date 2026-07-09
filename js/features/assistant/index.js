@@ -9,6 +9,7 @@
 
 import { $, $$, on, delegate, el, setVisible } from '../../core/dom.js';
 import { store } from '../../core/store.js';
+import { STORAGE_KEYS } from '../../core/constants.js';
 import { getLocalDateString, formatDate, formatCurrency } from '../../core/format.js';
 import { add } from '../expenses/actions.js';
 import { isIncomeCategory } from '../categories/categories.model.js';
@@ -18,6 +19,7 @@ import { DEFAULT_MODELS } from './providers.js';
 import { startTrialIfNeeded, getEntitlement, activateLicense, TRIAL_DAYS } from './entitlement.js';
 import { logInteraction, markOutcome } from './audit-log.js';
 import { mountAssistantSettings, getAssistantConfig } from './settings.js';
+import { mascotIcon } from './mascot.js';
 
 let panelEl, bannerEl, messagesEl, inputEl, sendEl;
 let seq = 0;
@@ -34,6 +36,10 @@ export function mount() {
     sendEl = $('#xpensebot-send');
     const closeBtn = $('#xpensebot-close');
     if (!fab || !panelEl || !bannerEl || !messagesEl || !inputEl || !sendEl) return;
+
+    fab.append(mascotIcon('xbot-mascot-fab'));
+    const titleMascotSlot = $('#xpensebot-title-mascot');
+    if (titleMascotSlot) titleMascotSlot.prepend(mascotIcon('xbot-mascot-header'));
 
     mountAssistantSettings();
 
@@ -62,14 +68,47 @@ function openPanel() {
     setVisible(panelEl, true);
     if (!introShown) {
         introShown = true;
-        addBubble('bot',
-            el('p', {}, 'Hi! Tell me what you spent and I’ll log it — try:'),
-            el('p', {}, el('em', {}, 'lunch 150, rickshaw 40, tea 20 yesterday')),
-            el('p', { class: 'xbot-note' },
-                'One date word applies to the whole message. I use your currency and today’s date unless you say otherwise, and I always ask you to confirm before saving.')
-        );
+        if (isFirstEverOpen()) {
+            showOnboardingTour();
+            markOnboarded();
+        } else {
+            addBubble('bot',
+                el('p', {}, 'Hi! Tell me what you spent and I’ll log it — try:'),
+                el('p', {}, el('em', {}, 'lunch 150, rickshaw 40, tea 20 yesterday')),
+                el('p', { class: 'xbot-note' },
+                    'One date word applies to the whole message. I use your currency and today’s date unless you say otherwise, and I always ask you to confirm before saving.')
+            );
+        }
     }
     if (ensureUnlocked()) inputEl.focus();
+}
+
+function isFirstEverOpen() {
+    try {
+        return !localStorage.getItem(STORAGE_KEYS.ASSISTANT_ONBOARDED);
+    } catch (_) {
+        return false;
+    }
+}
+
+function markOnboarded() {
+    try {
+        localStorage.setItem(STORAGE_KEYS.ASSISTANT_ONBOARDED, '1');
+    } catch (_) { /* storage unavailable — tour just replays next time */ }
+}
+
+/** One-time first-open tour: how to log, how confirm works, where budget/categories live. */
+function showOnboardingTour() {
+    addBubble('bot',
+        el('p', {}, 'Hi, I’m XpenseBot 👋 — type what you spent in plain language and I’ll turn it into an entry. Try:'),
+        el('p', {}, el('em', {}, 'lunch 150, rickshaw 40, tea 20 yesterday'))
+    );
+    addBubble('bot',
+        el('p', {}, 'I’ll show you a preview before saving anything — untick a row to skip it, then hit Add. I never save without your confirm.')
+    );
+    addBubble('bot',
+        el('p', {}, 'Categories, budget, and theme live in Settings (⚙️) outside this panel — I just handle logging.')
+    );
 }
 
 function renderBanner() {
@@ -285,9 +324,10 @@ function disablePreview(card) {
 // ---- helpers ---------------------------------------------------------------
 
 function addBubble(role, ...children) {
+    const isBot = role !== 'user';
     const bubble = el('div', {
-        class: `xbot-bubble ${role === 'user' ? 'xbot-user' : 'xbot-bot'}`
-    }, ...children);
+        class: `xbot-bubble ${isBot ? 'xbot-bot' : 'xbot-user'}`
+    }, isBot ? el('div', { class: 'xbot-bubble-inner' }, mascotIcon('xbot-mascot-bubble'), el('div', {}, ...children)) : el('div', {}, ...children));
     messagesEl.append(bubble);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return bubble;
