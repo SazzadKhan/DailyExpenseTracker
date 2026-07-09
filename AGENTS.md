@@ -96,8 +96,11 @@ docs/
 8. **DOM lookups:** use `$('#id')` and `$$('.cls')` from `core/dom.js`. Do
    not sprinkle `document.getElementById` in feature code.
 9. **One feature = one folder.** Each folder owns its own CSS file under
-   `css/components/` and a single entry module that exports a `mount(root)`
-   function called from `js/main.js`.
+   `css/components/` and a single entry module that exports a zero-argument
+   `mount()` function called from `js/main.js`. (Exception: `js/features/
+   expenses/` mounts several entry modules — `index.js`, `add-modal.js`,
+   `list.js`, `edit-modal.js`, `csv.js`, `delete-all.js` — each from
+   `js/main.js`.)
 10. **No new top-level files** unless absolutely necessary. Put docs in
     `docs/`, code under `js/` or `css/`.
 
