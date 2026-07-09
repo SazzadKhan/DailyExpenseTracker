@@ -320,6 +320,15 @@
                     : `<span class="fail">✗</span> ${r.name}<div class="fail-detail">${r.err.replace(/</g,'&lt;')}</div>`;
                 ol.appendChild(li);
             }
+
+            // Machine-readable results for tests/run-smoke.mjs (headless runner).
+            window.__SMOKE_RESULTS__ = {
+                total: results.length,
+                passed: results.length - failed.length,
+                failed: failed.length,
+                failures: failed.map(r => ({ name: r.name, err: r.err }))
+            };
+            document.body.dataset.smokeDone = '1';
         }
 
         (async () => {
