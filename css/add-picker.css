@@ -1,0 +1,719 @@
+/* css/add-picker.css — split from styles.css (lines 2822-3537), rules unchanged.
+   Load order matters: see the ordered <link> list in index.html. */
+
+/* Compact Add Modal for Mobile */
+@media (max-width: 768px) {
+    #add-modal .modal-content {
+        padding: 15px;
+        margin: 5px;
+        width: 100%;
+        max-width: 100%;
+        border-radius: 12px;
+    }
+    
+    #add-modal .modal-header h3 {
+        font-size: 1.1rem;
+    }
+    
+    #add-modal .expense-form {
+        gap: 10px;
+    }
+    
+    #add-modal .form-row {
+        gap: 10px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    /* Make date full width or just let it be 1fr */
+    #add-modal .form-row:first-child .form-group:first-child {
+        grid-column: span 2;
+    }
+    
+    #add-modal .form-group {
+        gap: 4px;
+        min-width: 0; /* Override min-width 150px */
+    }
+    
+    #add-modal .form-group-wide {
+        grid-column: span 2;
+    }
+    
+    #add-modal .form-group-button {
+        grid-column: span 2;
+        margin-top: 5px;
+    }
+    
+    #add-modal input, 
+    #add-modal select, 
+    #add-modal .btn-add {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+    
+    #add-modal label {
+        font-size: 0.8rem;
+        margin-bottom: 2px;
+    }
+}
+
+/* ========================================
+   Smart Add-Modal Picker
+======================================== */
+.add-modal-content {
+    max-width: 520px;
+    padding: 20px 22px;
+}
+
+.add-modal-content .modal-header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+}
+
+.add-modal-content .modal-header h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+}
+
+.smart-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Big amount field hero */
+.amount-hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: var(--bg-input);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px 16px;
+    transition: var(--transition);
+}
+
+.amount-hero:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+.amount-symbol {
+    font-size: 1.45rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    line-height: 1;
+}
+
+.amount-hero input {
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    width: 100%;
+    max-width: 220px;
+    text-align: center;
+    font-family: inherit;
+    padding: 0;
+    -moz-appearance: textfield;
+    appearance: textfield;
+    letter-spacing: -0.5px;
+}
+
+.amount-hero input::-webkit-outer-spin-button,
+.amount-hero input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.amount-hero input::placeholder {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Type filter (Expense / Income / All) */
+.type-filter {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-input);
+    padding: 3px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+}
+
+.type-filter-btn {
+    flex: 1;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-radius: calc(var(--radius-md) - 3px);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: inherit;
+}
+
+.type-filter-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.type-filter-btn.active {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+/* Picker section header */
+.picker-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.picker-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.picker-selected {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--primary);
+    text-transform: none;
+    letter-spacing: 0;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.picker-label-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* Grid / list view toggle */
+.view-toggle {
+    display: inline-flex;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.view-toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    width: 24px;
+    height: 22px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    padding: 0;
+    font-family: inherit;
+}
+
+.view-toggle-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.view-toggle-btn.active {
+    background: var(--primary);
+    color: #fff;
+}
+
+/* List view: single column, icon + name side by side */
+.category-picker-grid[data-view="list"] {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 220px;
+}
+
+.category-picker-grid[data-view="list"] .category-tile {
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    min-height: 0;
+    text-align: left;
+}
+
+.category-picker-grid[data-view="list"] .tile-icon {
+    font-size: 1.1rem;
+}
+
+.category-picker-grid[data-view="list"] .tile-name {
+    font-size: 0.82rem;
+    color: var(--text-primary);
+}
+
+/* Grid view: icon only (compact) */
+.category-picker-grid[data-view="grid"] {
+    grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+    gap: 5px;
+    max-height: 160px;
+}
+
+.category-picker-grid[data-view="grid"] .category-tile {
+    padding: 8px 4px;
+    min-height: 44px;
+    gap: 0;
+}
+
+.category-picker-grid[data-view="grid"] .tile-icon {
+    font-size: 1.3rem;
+}
+
+.category-picker-grid[data-view="grid"] .tile-name {
+    display: none;
+}
+
+.category-picker-grid[data-view="grid"] .category-tile {
+    position: relative;
+}
+
+/* Tooltip on hover in grid mode so users still know what each icon is */
+.category-picker-grid[data-view="grid"] .category-tile:hover::after {
+    content: attr(data-category);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Visual category tile grid \u2014 ALL categories visible at a glance */
+.category-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding: 2px;
+}
+
+.category-tile-add {
+    border-style: dashed !important;
+    opacity: 0.85;
+}
+.category-tile-add:hover {
+    opacity: 1;
+    border-style: solid !important;
+}
+.chip-add {
+    border-style: dashed !important;
+    opacity: 0.85;
+}
+.chip-add:hover {
+    opacity: 1;
+    border-style: solid !important;
+}
+
+.category-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 4px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: inherit;
+    text-align: center;
+    min-height: 58px;
+}
+
+.category-tile:hover {
+    border-color: var(--primary);
+    background: var(--bg-hover);
+}
+
+.category-tile.selected {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18) 0%, rgba(99, 102, 241, 0.06) 100%);
+    box-shadow: 0 0 0 1px var(--primary);
+}
+
+.category-tile.is-income {
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.category-tile.is-income.selected {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.18) 0%, rgba(34, 197, 94, 0.06) 100%);
+    border-color: var(--secondary, #22c55e);
+    box-shadow: 0 0 0 1px var(--secondary, #22c55e);
+}
+
+.tile-icon {
+    font-size: 1.15rem;
+    line-height: 1;
+}
+
+.tile-name {
+    font-size: 0.65rem;
+    font-weight: 500;
+    line-height: 1.15;
+    word-break: break-word;
+    color: var(--text-secondary);
+}
+
+.category-tile.selected .tile-name {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.picker-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 18px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Subcategory chips */
+.subcategory-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    max-height: 110px;
+    overflow-y: auto;
+    padding: 2px;
+}
+
+.chip {
+    padding: 5px 11px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: inherit;
+}
+
+.chip:hover {
+    border-color: var(--primary);
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.chip.selected {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+/* Compact date + description row */
+.smart-form .compact-row {
+    gap: 10px;
+    margin-bottom: 0;
+}
+
+.smart-form .compact-row .form-group {
+    margin-bottom: 0;
+}
+
+.smart-form .compact-row label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.smart-form .compact-row input {
+    padding: 9px 12px;
+    font-size: 0.9rem;
+}
+
+/* Inline amount field (sits beside date) */
+.amount-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0 12px;
+    transition: var(--transition);
+}
+
+.amount-inline:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+.amount-inline-symbol {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    line-height: 1;
+}
+
+.amount-inline input {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 9px 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    width: 100%;
+    font-family: inherit;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.amount-inline input::-webkit-outer-spin-button,
+.amount-inline input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.smart-form .modal-actions {
+    margin-top: 8px;
+}
+
+.btn-add-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    font-size: 0.9rem;
+}
+
+.btn-add-primary .btn-icon {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.smart-form .btn-cancel {
+    padding: 9px 18px;
+    font-size: 0.9rem;
+}
+
+/* Mobile tweaks for the smart picker */
+@media (max-width: 640px) {
+    .add-modal-content {
+        padding: 18px;
+    }
+    .amount-hero input {
+        font-size: 2rem;
+    }
+    .amount-symbol {
+        font-size: 1.6rem;
+    }
+    .category-picker-grid {
+        grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+        max-height: 220px;
+        gap: 8px;
+    }
+    .category-tile {
+        min-height: 78px;
+        padding: 10px 6px;
+    }
+    .tile-icon {
+        font-size: 1.5rem;
+    }
+    .tile-name {
+        font-size: 0.72rem;
+    }
+}
+
+
+/* =========================================================================
+   Step-by-step "smart form" stage gating (Add Transaction modal)
+   Stages: category ? subcategory ? amount ? note (Save)
+   The form has data-stage="<current>". Steps further than the current
+   stage are locked: dimmed and non-interactive. The active step pulses.
+   ========================================================================= */
+
+.smart-form [data-step] {
+    transition: opacity 0.25s ease, filter 0.25s ease, transform 0.25s ease;
+}
+
+/* Lock any step that is not yet reached */
+.smart-form[data-stage="category"] [data-step="subcategory"],
+.smart-form[data-stage="category"] [data-step="amount"],
+.smart-form[data-stage="category"] [data-step="note"],
+.smart-form[data-stage="subcategory"] [data-step="amount"],
+.smart-form[data-stage="subcategory"] [data-step="note"],
+.smart-form[data-stage="amount"] [data-step="note"] {
+    opacity: 0.32;
+    filter: saturate(0.55);
+    pointer-events: none;
+    user-select: none;
+}
+
+/* The Cancel button is the ONE thing always reachable, even in locked
+   action row. */
+.smart-form .modal-actions[data-step] .btn-cancel {
+    pointer-events: auto;
+    opacity: 1;
+    filter: none;
+}
+
+/* Disabled Save: visual when stage hasn't reached note yet, or
+   when the disabled attribute is set */
+.smart-form #btn-add-transaction:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* Active-step glow: subtle outline pulse on the section the user
+   should engage with next. */
+@keyframes step-glow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(99, 179, 237, 0);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(99, 179, 237, 0.18);
+    }
+}
+
+.smart-form [data-step].step-active {
+    border-radius: var(--radius-lg, 12px);
+    animation: step-glow 1.8s ease-in-out infinite;
+    position: relative;
+}
+
+/* Small "next-up" caret hint on the active picker label */
+.smart-form [data-step].step-active .picker-label > span:first-child::after,
+.smart-form [data-step].step-active > .form-group label::after {
+    content: " ? next";
+    color: var(--accent, #63b3ed);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    opacity: 0.85;
+    margin-left: 4px;
+}
+
+/* When the amount step is active, highlight the amount input itself */
+.smart-form[data-stage="amount"] #expense-amount {
+    box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.25);
+    border-color: var(--accent, #63b3ed);
+}
+
+/* Once everything is ready, give the Save button a gentle attention pulse */
+@keyframes save-pulse {
+    0%, 100% { transform: translateY(0); box-shadow: 0 4px 14px rgba(72, 187, 120, 0.25); }
+    50%      { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(72, 187, 120, 0.45); }
+}
+
+.smart-form[data-stage="note"] #btn-add-transaction:not(:disabled) {
+    animation: save-pulse 1.8s ease-in-out infinite;
+}
+
+/* =========================================================================
+   Bottom-nav "Log" attention pulse � naturally draws the eye to the
+   primary add entry point when the dashboard is idle.
+   ========================================================================= */
+@keyframes nav-add-attract {
+    0%, 100% {
+        transform: scale(1);
+        text-shadow: 0 0 0 rgba(72, 187, 120, 0);
+    }
+    50% {
+        transform: scale(1.12);
+        text-shadow: 0 0 14px rgba(72, 187, 120, 0.6);
+    }
+}
+
+.bottom-nav .nav-item[data-page="add"] .nav-icon {
+    display: inline-block;
+    animation: nav-add-attract 2.4s ease-in-out infinite;
+    transform-origin: center;
+}
+
+/* Stop the pulse while the user is already on the Add page or modal is open */
+.bottom-nav .nav-item[data-page="add"].active .nav-icon,
+body.modal-open .bottom-nav .nav-item[data-page="add"] .nav-icon {
+    animation: none;
+    transform: none;
+    text-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .smart-form [data-step].step-active,
+    .smart-form[data-stage="note"] #btn-add-transaction:not(:disabled),
+    .bottom-nav .nav-item[data-page="add"] .nav-icon {
+        animation: none;
+    }
+}
+/* ===== Quick filter chips (History page) ===== */
+.quick-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.quick-filter-chip {
+    background: var(--bg-input, rgba(255,255,255,0.04));
+    color: var(--text, inherit);
+    border: 1px solid var(--border, rgba(255,255,255,0.12));
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.quick-filter-chip:hover {
+    background: var(--bg-hover, rgba(255,255,255,0.08));
+    border-color: var(--accent, #63b3ed);
+}
+
+.quick-filter-chip:active {
+    transform: scale(0.96);
+}
+
+.quick-filter-chip.active {
+    background: var(--accent, #63b3ed);
+    color: #fff;
+    border-color: var(--accent, #63b3ed);
+    box-shadow: 0 2px 8px rgba(99, 179, 237, 0.35);

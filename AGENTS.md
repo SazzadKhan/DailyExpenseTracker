@@ -64,7 +64,9 @@ js/
     settings/           settings tabs, theme, currency, budget
     effects/            sound, haptics, ripple, confetti
 css/
-  tokens.css   base.css   layout.css   components/*.css
+  tokens.css (always first)   base-header.css   dashboard.css
+  table-modal.css   nav-cards.css   auth-landing.css   add-picker.css
+  components/*.css (one per feature)
 docs/
   REFACTOR_ROADMAP.md   MULTI_USER_PLAN.md   OAUTH_SETUP.md   ...
 ```
