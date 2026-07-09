@@ -266,13 +266,20 @@ const sheetsApi = {
 
     async replaceAllExpenses(expenses) {
         if (!this._spreadsheetId) return;
-        await this.deleteAllExpenses();
-        if (!expenses || expenses.length === 0) return;
+        if (!expenses || expenses.length === 0) return this.deleteAllExpenses();
+        // Write-then-trim: overwrite rows first so a failure mid-replace can
+        // never leave the sheet empty (worst case: stale tail rows remain).
         const values = expenses.map(_expenseToRow);
-        const range = encodeURIComponent(`${SHEET_NAME_EXPENSES}!A:I`);
+        const writeRange = encodeURIComponent(`${SHEET_NAME_EXPENSES}!A2:I${values.length + 1}`);
         await _fetchJson(
-            `${SHEETS_API}/${this._spreadsheetId}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
-            { method: 'POST', body: JSON.stringify({ values }) }
+            `${SHEETS_API}/${this._spreadsheetId}/values/${writeRange}?valueInputOption=RAW`,
+            { method: 'PUT', body: JSON.stringify({ values }) }
+        );
+        // Trim any leftover rows from a previously longer list.
+        const tailRange = encodeURIComponent(`${SHEET_NAME_EXPENSES}!A${values.length + 2}:I`);
+        await _fetchJson(
+            `${SHEETS_API}/${this._spreadsheetId}/values/${tailRange}:clear`,
+            { method: 'POST', body: '{}' }
         );
     },
 

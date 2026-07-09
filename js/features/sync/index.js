@@ -6,8 +6,10 @@ import { DEFAULT_CATEGORIES, STORAGE_KEYS } from '../../core/constants.js';
 import { storage } from '../../services/storage.js';
 import { log } from '../../core/log.js';
 import { getQueue, saveQueue } from '../expenses/actions.js';
+import { saveExpenses, saveSettings as persistSettings, saveCategories as persistCategories } from '../../services/local-store.js';
 import { dialog } from '../../services/dialog.js';
 import { showToast } from '../../core/toast.js';
+import { resolveConflictQueue } from './sync.model.js';
 
 const $log = log('sync');
 
@@ -72,118 +74,6 @@ export function updateSyncStatus(status) {
     }
 }
 
-/**
- * Iterates through the offline queue and resolves conflicts with remote data interactively.
- * @param {import('../../core/schema.js').Expense[]} remoteExpenses
- * @param {import('../../core/schema.js').SyncQueueItem[]} queue
- * @param {Date|null} lastSync
- * @returns {Promise<import('../../core/schema.js').Expense[]>}
- */
-async function resolveConflictQueue(remoteExpenses, queue, lastSync) {
-    let resolvedList = [...remoteExpenses];
-
-    for (const item of queue) {
-        if (item.action === 'delete' && item.id === 'all') {
-            resolvedList = [];
-            continue;
-        }
-
-        const remoteItem = resolvedList.find(e => String(e.id) === String(item.id));
-
-        if (item.action === 'add') {
-            if (remoteItem) {
-                // Added on both sides: compare fields
-                const localFields = JSON.stringify({ ...item.expense, timestamp: '' });
-                const remoteFields = JSON.stringify({ ...remoteItem, timestamp: '' });
-                if (localFields !== remoteFields) {
-                    const keepLocal = await dialog.confirm({
-                        title: 'Sync Conflict (Add)',
-                        message: `A transaction was added on both devices with matching ID.\n\n` +
-                                 `Local: ${item.expense.category} (${item.expense.subcategory}) - $${item.expense.amount} on ${item.expense.date}\n` +
-                                 `Cloud: ${remoteItem.category} (${remoteItem.subcategory}) - $${remoteItem.amount} on ${remoteItem.date}\n\n` +
-                                 `Keep your local version?`,
-                        confirmText: 'Keep Local',
-                        cancelText: 'Use Cloud',
-                        tone: 'warn'
-                    });
-                    if (keepLocal) {
-                        resolvedList = resolvedList.map(e => String(e.id) === String(item.id) ? item.expense : e);
-                    }
-                }
-            } else {
-                resolvedList.push(item.expense);
-            }
-        } else if (item.action === 'update') {
-            if (remoteItem) {
-                const localFields = JSON.stringify({ ...item.expense, timestamp: '' });
-                const remoteFields = JSON.stringify({ ...remoteItem, timestamp: '' });
-                if (localFields !== remoteFields) {
-                    // Check if cloud version changed since last sync
-                    const remoteModifiedTime = remoteItem.timestamp ? new Date(remoteItem.timestamp) : null;
-                    const remoteChanged = lastSync && remoteModifiedTime && remoteModifiedTime > lastSync;
-
-                    if (remoteChanged) {
-                        const keepLocal = await dialog.confirm({
-                            title: 'Sync Conflict (Edit)',
-                            message: `Transaction was edited on both devices since last sync.\n\n` +
-                                     `Local: ${item.expense.category} - $${item.expense.amount} on ${item.expense.date} (${item.expense.description || 'no note'})\n` +
-                                     `Cloud: ${remoteItem.category} - $${remoteItem.amount} on ${remoteItem.date} (${remoteItem.description || 'no note'})\n\n` +
-                                     `Keep your local version?`,
-                            confirmText: 'Keep Local',
-                            cancelText: 'Use Cloud',
-                            tone: 'warn'
-                        });
-                        if (keepLocal) {
-                            resolvedList = resolvedList.map(e => String(e.id) === String(item.id) ? item.expense : e);
-                        }
-                    } else {
-                        // Only modified locally, auto-apply local edit
-                        resolvedList = resolvedList.map(e => String(e.id) === String(item.id) ? item.expense : e);
-                    }
-                }
-            } else {
-                // Deleted in cloud, edited locally
-                const restore = await dialog.confirm({
-                    title: 'Sync Conflict (Deleted on Cloud)',
-                    message: `Transaction (${item.expense.category} - $${item.expense.amount}) was deleted from the cloud but modified locally.\n\n` +
-                             `Restore this transaction?`,
-                    confirmText: 'Restore',
-                    cancelText: 'Keep Deleted',
-                    tone: 'warn'
-                });
-                if (restore) {
-                    resolvedList.push(item.expense);
-                }
-            }
-        } else if (item.action === 'delete') {
-            if (remoteItem) {
-                // Deleted locally: check if edited in cloud since last sync
-                const remoteModifiedTime = remoteItem.timestamp ? new Date(remoteItem.timestamp) : null;
-                const remoteChanged = lastSync && remoteModifiedTime && remoteModifiedTime > lastSync;
-
-                if (remoteChanged) {
-                    const keepCloud = await dialog.confirm({
-                        title: 'Sync Conflict (Deleted Locally)',
-                        message: `Transaction was deleted locally but edited on another device.\n\n` +
-                                 `Cloud: ${remoteItem.category} - $${remoteItem.amount} on ${remoteItem.date}\n\n` +
-                                 `Keep the Cloud version?`,
-                        confirmText: 'Keep Cloud',
-                        cancelText: 'Keep Delete',
-                        tone: 'warn'
-                    });
-                    if (!keepCloud) {
-                        resolvedList = resolvedList.filter(e => String(e.id) !== String(item.id));
-                    }
-                } else {
-                    // Only deleted locally, auto-apply delete
-                    resolvedList = resolvedList.filter(e => String(e.id) !== String(item.id));
-                }
-            }
-        }
-    }
-    return resolvedList;
-}
-
 /** Pull all data from the cloud backend into the store. */
 export async function pullFromCloud() {
     if (!storage.isCloud() || isSyncing) return;
@@ -205,13 +95,12 @@ export async function pullFromCloud() {
 
             if (queue.length > 0) {
                 $log.info(`Sync queue has ${queue.length} items; starting conflict resolution`);
-                finalExpenses = await resolveConflictQueue(remoteExpenses, queue, lastSyncTime);
-                saveQueue([]); // Clear queue after successful resolution
+                finalExpenses = await resolveConflictQueue(remoteExpenses, queue, lastSyncTime, (opts) => dialog.confirm(opts));
                 wroteBackToCloud = true;
             }
 
             // Save the merged list locally
-            localStorage.setItem('expenses', JSON.stringify(finalExpenses));
+            saveExpenses(finalExpenses);
             store.update({ expenses: finalExpenses }, EVENTS.EXPENSES_CHANGED);
 
             // Settings
@@ -219,7 +108,7 @@ export async function pullFromCloud() {
             let settings = currentSettings;
             if (data.settings && Object.keys(data.settings).length > 0) {
                 settings = { ...currentSettings, ...data.settings };
-                localStorage.setItem('settings', JSON.stringify(settings));
+                persistSettings(settings);
             } else {
                 storage.saveSettings(currentSettings);
             }
@@ -234,7 +123,7 @@ export async function pullFromCloud() {
                     categories.Income = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES.Income));
                     storage.saveCategories(categories);
                 }
-                localStorage.setItem('categories', JSON.stringify(categories));
+                persistCategories(categories);
             } else {
                 storage.saveCategories(currentCategories);
             }
@@ -243,6 +132,7 @@ export async function pullFromCloud() {
             // If we processed offline changes, write the merged results back to Google Sheets
             if (wroteBackToCloud) {
                 await storage.replaceAllExpenses(finalExpenses);
+                saveQueue([]); // Only safe to drop the queue once the cloud write-back succeeded
                 showToast('Offline sync resolved successfully!');
             }
         }
@@ -259,7 +149,8 @@ export async function pullFromCloud() {
 
 /** Push the current store snapshot to the cloud backend. */
 export async function pushAllToCloud() {
-    if (!storage.isCloud()) return;
+    if (!storage.isCloud() || isSyncing) return;
+    isSyncing = true;
     updateSyncStatus('syncing');
     try {
         const { expenses, settings, categories } = store.getState();
@@ -270,6 +161,8 @@ export async function pushAllToCloud() {
     } catch (err) {
         $log.error('push failed', err);
         updateSyncStatus('error');
+    } finally {
+        isSyncing = false;
     }
 }
 

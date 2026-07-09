@@ -1,14 +1,16 @@
-# XpenseBot — Business Plan v2.1
+# XpenseBot — Business Plan v2.3
 
-> **Tagline.** *Tell your Telegram what you spent. We handle the rest.*
+> **Tagline.** *Type it like you'd text it. We handle the rest.*
 >
-> Privacy-first, local-first daily expense tracker with an optional
-> Telegram bot for natural-language logging. Free web app forever;
-> paid bot tier for users who want frictionless logging from their
-> messaging app.
+> Privacy-first, local-first daily expense tracker for cash-first users.
+> **One app.** Natural-language logging, charts, streaks, summaries,
+> reminders — all inside the web app (installable as a PWA), all running
+> in the user's browser, writing to the user's own Google Sheet.
+> No bot, no companion apps, no servers.
 >
-> *v1 plan archived at [BUSINESS_PLAN.v1.md](BUSINESS_PLAN.v1.md).
-> v2.1 supersedes the v2 mentor-review draft.*
+> *v1 archived at [BUSINESS_PLAN.v1.md](BUSINESS_PLAN.v1.md). v2.1
+> (bot-centrepiece) and v2.2 (bot-as-Pro-channel) are in git history.
+> v2.3 written July 2026.*
 
 ---
 
@@ -16,311 +18,335 @@
 
 | | |
 |---|---|
-| **Core product** | Vanilla-JS expense tracker, local-first, optional Google Sheets sync |
-| **Key innovation** | Telegram bot — log expenses by sending a natural-language message |
-| **Monetisation** | Free forever (web); Pro ($4/mo) unlocks the Telegram bot |
-| **Privacy model** | No central DB. User data lives in their own Google Sheet. |
-| **AI strategy** | Regex parser ships v1 (no API key needed). LLM is Pro-Plus, later. |
-| **12-month goal** | 5,000 MAU, 100 Pro subscribers, validated retention |
-| **Launch geo** | Bangladesh + South Asia first (where Telegram + bot novelty land) |
+| **Core product** | One vanilla-JS web app (PWA), local-first, optional Google Sheets sync |
+| **Key innovation** | Natural-language quick-add — `lunch 150, rickshaw 40, tea 20` parsed client-side |
+| **Monetisation** | Free forever (logging + habit loop); Pro = a local chat assistant over your own data |
+| **Privacy model** | No central DB, no servers, no held tokens. Data and OAuth never leave the user's browser + own Sheet. |
+| **AI strategy** | Regex parser, client-side, improved on real parse-failure data before any LLM is considered |
+| **12-month goal** | Retention first: 500 users logging on 20+ days per rolling 30-day window |
+| **Launch geo** | Bangladesh + South Asia (cash-first users; YNAB structurally can't follow) |
 
-**Status (May 2026).** Live on GitHub Pages. Mid-refactor to ES modules.
-Bot does not exist yet — Q1 deliverable.
-
----
-
-## 2. The Pivot, And Why
-
-The v1 plan had three structural weaknesses surfaced in mentor review:
-
-1. **"Free forever" branding undermined Pro tier conversion** — paying
-   users would feel baited.
-2. **Manual logging friction** killed retention before habit formation.
-3. **Pro features were weak** — extra themes and templates aren't a
-   reason to pay.
-
-The pivot resolves all three with one decision:
-
-> **Make the Telegram bot the centrepiece of the product, and the entire
-> reason Pro exists.**
-
-This works because:
-
-- **Friction eliminated.** Users text the bot the way they text a friend.
-  No app to open.
-- **Behavioural fit.** Logging happens where users already are.
-- **Privacy intact.** Bot writes to the user's own Google Sheet.
-- **Pro is obvious.** "Pay $4 to log expenses by texting" is a sentence
-  a human can repeat.
-
-### What changed from the v2 draft
-
-The v2 draft asked Pro users to bring their own AI API key. That's a
-fatal funnel — expect ~25% completion of paying users who clicked
-"subscribe." v2.1 ships a **regex parser** for the bot's v1, which
-handles 95%+ of real-world inputs (`lunch 150, rickshaw 40, tea 20`)
-without any LLM. LLM-backed parsing becomes a Pro-Plus tier later, once
-we have revenue to fund inference or a real reason to push BYO-key
-again.
+**Status (July 2026).** Live on GitHub Pages. ES-module refactor done.
+Next ship: sync data-loss fixes, then the quick-add box.
 
 ---
 
-## 3. Product
+## 2. How the plan got here
 
-### 3.1  Free Tier (Web App) — stays free forever
+- **v2.1 (May):** Telegram bot as centrepiece; Pro = the bot. Problem:
+  a bot needs a server holding every user's OAuth tokens — a central
+  credential store that breaks the privacy promise — and two months in,
+  the bot had zero code and the founder had zero user contact.
+- **v2.2 (early July):** parser moved into the free web app (client-side,
+  no token custody); bot demoted to a Pro delivery channel, later.
+- **v2.3 (now):** **the bot is cut entirely.** If the parser is the
+  product, a second delivery channel is a second codebase, a hosting
+  bill, a token-custody design, a Telegram platform dependency, and a
+  Google sensitive-scope verification — all to re-deliver features one
+  app already has. A solo founder maintains one product or zero.
 
-- One-tap expense logging
-- Categories + subcategories, fully editable
-- Monthly / daily / category charts
-- Budget bar with warning threshold
-- Google Sheets sync (user-authorised OAuth)
-- CSV import / export
-- 4 themes: Dark, Panda, Peaceful, Edgy
-- Haptics, micro-animations, confetti
+**The v2.3 decision:** *one app does everything.*
 
-### 3.2  Pro Tier — the Telegram Bot ($4/mo or $35/yr)
+What one-app buys:
 
-Pro is not a feature-locked web app. It's a different interaction
-paradigm entirely.
+- **Zero servers, permanently.** The privacy claim ("we don't have your
+  data") is architectural fact, not policy. Nothing to host, secure,
+  or pay for.
+- **One codebase, one roadmap.** Every hour goes into the product users
+  touch.
+- **PWA = the mobile app.** Add-to-home-screen, offline-first (already
+  true), full-screen. No app store, no second platform.
 
-| Feature | What it does |
+What one-app costs — stated honestly:
+
+- **Reach.** The bot's one real advantage was pinging users without the
+  app open. In v2.3, re-engagement leans on habit (streaks), on-device
+  notifications where the installed PWA supports them (good on Android,
+  weak on iOS), and in-app nudges. If retention data later shows we
+  *must* reach users externally, that decision gets made with evidence
+  and revenue — not assumed up front. (A minimal stateless push relay —
+  which stores notification subscriptions, never financial data or
+  tokens — is the fallback design, noted in §9.)
+
+---
+
+## 3. Product — one app, two layers
+
+### 3.1  Free — the tracker and the habit loop (forever)
+
+- **NL quick-add box:** `lunch 150, rickshaw 40, tea 20` → parsed items,
+  amounts, categories, one-tap confirm. Client-side only. Front and
+  centre on the first screen.
+- One-tap logging (classic form remains); categories + subcategories
+- Monthly / daily / category charts; budget bar with warning threshold
+- Google Sheets sync (user-authorised OAuth, browser-side); CSV
+  import/export
+- **XP, streaks, daily in-app nudges** — the habit loop is free
+- PWA install; 4 themes; haptics, micro-animations, confetti
+
+### 3.2  Pro — a local chat assistant over your own data
+
+Free tells you *what you spent*. Pro **talks to you about it** — a chat
+panel inside the app, running entirely client-side. "Basic intelligence"
+means a fixed grammar of intents over data the app already holds, built
+on the same parser as quick-add. No LLM, no API, no data leaving the
+browser.
+
+| Capability | Example |
 |---|---|
-| Natural-language logging | `lunch 150, rickshaw 40, tea 20` — parsed and written to your Sheet |
-| Inline confirmation | Bot replies with parsed items + running total |
-| One-tap correction | Reply `fix rickshaw → Transport` to recategorise |
-| Daily summary | End-of-day digest: totals, budget status, streak |
-| Weekly report + grade | Spending grade A–F based on budget adherence |
-| Smart reminders | Evening nudge if no log that day |
-| XP + streak via bot | Gamification events delivered as Telegram messages |
+| Conversational logging | `lunch 150 and rickshaw 40` → logged, running total replied |
+| Spending questions | `how much on food this month?` · `top category this week?` |
+| Affordability check | `can I spend 500 today?` → answer from budget + month-to-date |
+| Recall | `when did I last pay rent?` · `what did I log yesterday?` |
+| Daily summary | End-of-day digest in the chat: totals, budget status, streak |
+| Weekly report + grade | Spending grade A–F, trends vs. last week |
+| Smart reminders | Evening nudge if no log today; budget alerts at 70%/90% (on-device where the platform allows) |
+| Recurring templates | `log rent` → remembered amount; auto-suggested on schedule |
+
+**Scope guard:** v1 ships with a fixed list of ~10 intents and a helpful
+"I can't answer that yet" fallback that logs the miss (aggregate,
+opt-out) — the miss log decides which intent ships next. A chat UI is a
+scope monster if unfenced; the intent list is the fence. An *on-device*
+model (WebGPU-class, still no server) is a year-2 experiment at most,
+and only if intent-miss data proves the grammar has hit its ceiling.
+
+Premium themes ride along as a cosmetic extra. The pitch is one
+sentence: **"Free shows you the numbers. Pro answers when you ask."**
+Nothing in Pro gates the habit loop; a free user can track forever and
+never feel baited.
 
 ### 3.3  Parser strategy
 
-**v1 (Q1):** Regex/grammar parser. Handles `<item> <amount>` lists with
-optional currency, commas, "and", "for", common Bengali/English mixed
-input. No external dependency, no API key, no inference cost. Ships in
-a weekend.
+**Now:** Regex/grammar parser, client-side. `<item> <amount>` lists with
+optional currency, commas, "and", "for", Bengali/English mixed input and
+Bengali numerals. Every parse failure logged (aggregate, opt-out) so the
+grammar improves on evidence.
 
-**v1.5 (Q3 if needed):** Add a small disambiguation layer for ambiguous
-inputs (`coffee` → which subcategory?). Still no LLM — uses the user's
-historical category mapping.
+**Later:** disambiguation using the user's own historical category
+mapping (still no LLM). The Pro chat assistant (§3.2) extends the same
+grammar with *question* intents — one parser core, two surfaces. LLM /
+on-device-model parsing remains a year-2 candidate, funded by revenue or
+not at all.
 
-**Pro-Plus (year 2 candidate):** LLM-backed parsing for receipts,
-free-form descriptions, multi-language input. Either we eat the cost on
-a metered tier or revisit BYO-key when we have a base of believers who
-will tolerate the setup.
+**Validation this month:** 10 friends-and-family send one week of real
+expense messages; the parser is tuned against that corpus by hand before
+launch.
 
-### 3.4  Platform: Telegram first
+### 3.4  Competition
 
-| Factor | Telegram | WhatsApp |
-|---|---|---|
-| Bot API | Free, instant | Meta Business — paid, approval |
-| Dev friction | Weekend | Weeks of compliance |
-| Privacy reputation | Strong | Meta-owned |
-
-WhatsApp is a Phase 2 question, only if Telegram shows real retention.
+Splitwise, YNAB, expense bots, Notion templates all exist. The
+defensible sentence: **privacy-first cash tracking for South Asia, in a
+spreadsheet the user already owns, in the language they actually mix.**
+YNAB assumes bank feeds and Western cards; bots and apps hold your data
+on their servers. v2.3 sharpens the moat: this is now the only tool in
+the category with *literally no backend* — there is nothing to breach,
+subpoena, or sunset.
 
 ---
 
 ## 4. Retention
 
-The biggest failure mode of v1 was data loss: a guest-mode user clears
-their browser, loses everything, blames us. **These ship before any
-growth push.**
+### 4.1  Data-loss mitigations (blocking, in progress)
 
-### 4.1  Data-loss mitigations (Q1, blocking)
+Before any growth push:
 
+- Fix the three confirmed sync bugs — [PLAN-LOST-LUGGAGE.md](PLAN-LOST-LUGGAGE.md)
+  (rank 1: silent data loss), then [PLAN-FALSE-ALARM.md](PLAN-FALSE-ALARM.md)
+  (spurious conflict dialogs) and [PLAN-STALE-PASS.md](PLAN-STALE-PASS.md)
+  (sync dies after ~1 hour).
 - Persistent "your data is only on this device" banner in guest mode.
 - Automatic JSON backup download on day 7 if not signed in.
-- Monthly export reminder toast.
-- Sheets sync setup surfaced as the second screen of the onboarding
-  tour, not buried in settings.
+- Sheets sync surfaced in onboarding, not buried in settings.
 
-### 4.2  XP system
+### 4.2  XP system — free tier
 
-XP rewards **financial behaviour**, not logging volume. Logging 50 tiny
-expenses to farm points should feel hollow.
+XP rewards **financial behaviour**, not logging volume:
 
 | Action | XP |
 |---|---|
 | Logged ≥1 expense today | +10 |
 | Ended day within daily budget | +20 |
-| Replied to bot summary | +5 |
 | 7-day streak bonus | +50 |
 | 30-day streak bonus | +200 + theme unlock |
 
-| Level | XP Range | Perk |
-|---|---|---|
-| Beginner | 0 – 500 | — |
-| Tracker | 500 – 2,000 | — |
-| Saver | 2,000 – 5,000 | 🌟 7-day free Pro trial |
-| Pro Saver | 5,000+ | Supporter badge + exclusive theme |
+Saver tier (2,000+ XP) grants a **7-day Pro trial** — upselling the
+insights layer to users who already have the habit.
 
-The **Saver-tier free trial is the XP→Pro pipeline.** It converts
-gamification from cosmetic into a direct acquisition funnel.
+### 4.3  Notifications — honest scope
 
-### 4.3  Notifications
-
-All delivered via Telegram (Pro) or in-app toast (free). No browser
-push. The Telegram inbox is the only place we can reliably reach a user
-without permission friction.
-
-**Ship these:** streak congratulations, budget checks at 70%/90%,
-weekly grade, gentle re-engagement after 3+ silent days.
-
-**Never ship:** daily pings without personalisation, notifications
-before a budget is set, guilt before day 3.
+- **In-app:** streak states, budget warnings, summary cards. Always
+  available, free and Pro.
+- **On-device (installed PWA):** Pro reminders where the platform
+  supports local/scheduled notifications — reliable on Android, limited
+  on iOS. The settings page says so plainly instead of overpromising.
+- **Never:** daily pings without personalisation, notifications before a
+  budget is set, guilt before day 3.
 
 ### 4.4  Retention is the year-1 KPI, not MAU
 
-Success metric: **500 users logging expenses on 20+ days within a
-rolling 30-day window** by month 12. This matters more than visits or
-star count. It requires privacy-respecting telemetry on the app itself
-(Plausible-style, aggregate-only, opt-out — disclosed in the privacy
-page).
+Unchanged: **500 users logging on 20+ days within a rolling 30-day
+window** by month 12, measured with privacy-respecting aggregate
+telemetry (opt-out, disclosed).
 
 ---
 
 ## 5. Business Model
 
-### 5.1  Pricing
+### 5.1  Pricing — with an honest open problem
 
 | Tier | Price | Includes |
 |---|---|---|
-| Free | $0 forever | Full web app, Sheets sync, charts, CSV, 4 themes |
-| Pro | $4 / mo or $35 / yr | Telegram bot, NL logging, summaries, reminders, weekly grade |
-| Supporter (one-time) | $10 | Badge, all current premium themes |
+| Free | $0 forever | Tracker, NL quick-add, XP/streaks, sync, charts, CSV, 4 themes |
+| Pro | ~$2–4/mo or ~$20–35/yr — **price pending payments decision** | Local chat assistant: conversational logging, spending Q&A, summaries, weekly grade, reminders, recurring templates, premium themes |
+| Supporter (one-time) | $10 | Badge + lifetime premium themes (not the insights layer) |
+
+**⚠ Unresolved, blocking before Pro launch: how a person in Dhaka pays.**
+Stripe does not operate in Bangladesh, and the target user is defined by
+not living on cards. Candidates to evaluate on paper first: a
+merchant-of-record serving BD cards/wallets (Paddle, LemonSqueezy —
+verify BD support), bKash/Nagad merchant integration, or Google Play
+billing via a TWA wrapper (now more attractive since v2.3 is PWA-first).
+Price must be re-derived from local purchasing power — the $4 anchor is
+a US number. **If no viable rail exists, the geo, the price, or the tier
+changes — before launch, not after.**
+
+Note: with no servers, Pro entitlement is a signed license key stored
+client-side. Trivially crackable by a motivated dev — and explicitly not
+worth fighting. People who pay for a privacy tool are paying to support
+it; DRM would poison the brand for zero revenue.
 
 ### 5.2  What we will NEVER do
 
-- Sell user data. We don't have it.
-- Run ads.
-- Bank-linking middleware.
-- Anything that requires a central database of user finances.
+No selling user data (we don't have it), no ads, no bank-linking
+middleware, no central database of user finances, **no servers holding
+user tokens or financial data — period** (v2.3 makes this absolute; the
+only possible exception, a stateless push relay, may hold notification
+subscriptions only and requires a published design first).
 
 ### 5.3  Revenue tracks, ranked by realism
 
-| Track | Source | Realism |
-|---|---|---|
-| A | Pro subscriptions | Primary — validated by bot value |
-| B | One-time Supporter purchase | Easy conversion at moment of delight |
-| C | Donations / GitHub Sponsors | Low ceiling, zero overhead |
-| D | White-label / B2B2C licensing | **Year 2 only.** Not in year-1 scope. |
-| E | Selective affiliates (disclosed) | Only products we'd recommend |
+(A) Pro subscriptions, (B) one-time Supporter, (C) donations / GitHub
+Sponsors — strengthened by the no-backend story, (D) white-label — year
+2 only (now *more* plausible: a zero-infrastructure app is trivially
+white-labelable), (E) disclosed affiliates.
 
-White-label was a year-1 distraction in v1. Deferred to year 2 where it
-belongs.
+### 5.4  The hobby question — founder must answer in writing
+
+At realistic numbers (~$2K year 1) this is a side-business, not a
+venture. The plan is only worth executing if this sentence gets
+completed honestly:
+
+> *"This is worth running at ~$2K year-1 revenue because ________."*
+
+**Founder's answer:** *(unanswered as of July 2026 — answer before the
+quick-add box ships. Both "because it's my product lab and community"
+and "it isn't — this is a hobby and that's fine" are passing answers.
+Leaving it blank is the only failing one.)*
 
 ---
 
 ## 6. Financial Projections
 
-**Realistic assumptions** (downgraded from v1/v2 optimism):
-
-- 150K cumulative unique visits in year 1 (SEO + Telegram + 1 viral moment)
-- **2% visit→active** (industry-realistic for a utility tool with no brand)
-  → ~3,000 active users
-- **1% active→Pro** (achievable because the bot is the upsell, not gated themes)
-  → ~30 paying users by month 12
-- ARPU on Pro: ~$40/yr
+Assumptions: 150K cumulative visits year 1 (no "viral moment" line
+item — luck is welcome but not budgeted), 2% visit→active, 1%
+active→Pro, ARPU ~$25–40 depending on the §5.1 pricing outcome.
 
 | Revenue stream | Year 1 (realistic) | Year 1 (stretch) | Year 2 (if traction) |
 |---|---|---|---|
-| Pro subscriptions | $1,200 | $4,000 | $20,000 – $50,000 |
+| Pro subscriptions | $1,000 | $3,500 | $18,000 – $45,000 |
 | Supporter packs | $500 | $1,500 | $4,000 |
 | Donations / Sponsors | $500 | $1,500 | $3,000 |
 | White-label | $0 | $0 | $10,000 – $25,000 |
-| **Total** | **~$2,200** | **~$7,000** | **~$40,000 – $80,000** |
+| **Total** | **~$2,000** | **~$6,500** | **~$35,000 – $75,000** |
 
 | Cost | Year 1 |
 |---|---|
 | Domain + Cloudflare | ~$15 |
-| Stripe fees | ~$70 (2.9% + $0.30/txn) |
+| Payment-rail fees | unknown until §5.1 resolves (bKash/MoR ≠ Stripe's 2.9%) |
 | Privacy analytics (Plausible) | ~$120 |
-| Telegram bot hosting (free tier, fly.io / Railway) | $0 |
+| Hosting | **$0 — GitHub Pages, no backend** |
 | **Total** | **<$250** |
 
-**Honest framing.** At realistic numbers this is a side-business in
-year 1, not a venture. The plan must be worth running at ~$2K
-year-1 revenue. If it isn't, this is a hobby — and that's an honourable
-choice, just be clear about it.
+The v2.3 cost structure is the quiet superpower: at zero marginal cost,
+*any* revenue is profit, and the app can idle indefinitely without
+bleeding — which matters for a founder who has already burned out once.
 
 ---
 
 ## 7. Go-To-Market
 
-**Positioning.** *"The expense tracker that doesn't want anything from
-you — except a Telegram message."*
+**Positioning.** *"The expense tracker with no server to trust. Your
+notes, your Sheet, your language."*
 
-### 7.1  One channel, then the next
+### 7.1  One channel, and it doubles as the founder's community
 
-Multi-channel from zero with no team is how solo founders end up with
-200 visitors from six places and no learnings.
+Year-1 channel: **Telegram + Reddit communities in Bangladesh and South
+Asia.** Joining starts **now**, before launch — lurking, answering
+budgeting questions, asking how people track cash today. This is
+simultaneously the marketing channel, the parser-input research, and the
+founder's missing support network. Solo building without one already
+caused one burnout; community contact is a work item, not a
+nice-to-have.
 
-**Year-1 launch channel: Telegram + Reddit communities in Bangladesh
-and South Asia.**
+**Kill criterion (clock starts at quick-add launch):** 200 signups and
+50 week-4-retained users within 60 days. If missed, reassess before
+opening a second channel.
 
-Why:
-- Telegram penetration is high; the bot angle is novel there.
-- Founder can speak directly to the audience.
-- Cheap, fast feedback loop. No DR-70 SEO competition.
-
-**Kill criterion.** If this channel does not produce **200 signups and
-50 retained users (active in week 4)** within 60 days of bot launch,
-reassess before opening a second channel.
-
-**Second channel (only after #1 validates):** Show HN. One shot, prepare
-the README and demo for two weeks.
-
-**Deferred to year 2 unless revenue justifies a part-time writer:**
-SEO content operation. It's an 18–24 month compounding play and
-requires content-business muscle the team doesn't have.
+**Second channel (only after #1 validates):** Show HN — and "no backend,
+open source, your own Sheet" is a genuinely strong HN story.
+**Year 2:** SEO content operation, white-label.
 
 ### 7.2  Activation funnel
 
 ```
-Discover via Telegram community  →  Visit site  →  Add 1 expense in web app
-                                                            ↓
-                              Day 3: Sheets sync prompt  →  Day 7: bot trial offer
-                                                                       ↓
-                                              Week 4: retained  →  Pro conversion
+Discover via community → Visit site → Quick-add box on first screen
+                                              ↓
+                First expense parsed within 5 minutes  (north-star: >40%)
+                                              ↓
+              Day 3: Sheets sync prompt → streaks build (free)
+                                              ↓
+              Saver tier reached → 7-day Pro trial → Pro conversion
 ```
-
-The **single most important metric** is "first expense logged within 5
-minutes of arrival." Optimise nothing else until this is consistently
-above 40%.
 
 ---
 
-## 8. 12-Month Roadmap
+## 8. Roadmap (12 months from July 2026)
 
-Cut to what one person can actually ship.
+One person, one app, three things at a time, user contact every week.
 
-### Q1 — Foundation (3 deliverables, not 6)
-- Finish ES module refactor
-- Data-loss mitigations (banner, auto-backup, onboarding-tour OAuth)
-- Telegram bot MVP with regex parser → writes to user's Google Sheet
+### Now → month 2 — Trust + the product
+- Ship sync data-loss fixes (PLAN-LOST-LUGGAGE, then FALSE-ALARM,
+  STALE-PASS)
+- **Quick-add box** (client-side parser + confirm UI + parse-failure
+  logging)
+- 10 friends-and-family on it for a week; parser tuned on their real
+  messages
+- Founder joins 3–5 BD/SEA Telegram/Reddit communities
+- Written answers: payments paragraph (§5.1), hobby sentence (§5.4)
 
-### Q2 — Launch into one channel
-- Landing page that puts the bot front and centre
-- XP system + streak tracking (web app side)
-- Telegram + Reddit BD/SEA launch
-- Privacy-respecting in-app analytics (opt-out, aggregate)
-- **Target:** 200 signups, 50 week-4-retained users
+### Months 3–4 — Launch into one channel
+- Landing page: quick-add front and centre
+- XP + streaks live (free tier)
+- PWA manifest + install prompt (add-to-home-screen)
+- Privacy-respecting analytics (opt-out, aggregate)
+- Community launch. **Kill-criterion clock starts.**
 
-### Q3 — Depth (only if Q2 kill criterion passes)
-- Weekly grade via Telegram
-- Recurring expense templates via bot
-- Saver-tier 7-day Pro trial pipeline live
+### Months 5–7 — Pro build (only if kill criterion passes)
+- Insights engine: daily summary + weekly grade (client-side, pure
+  functions — the chat assistant's brain)
+- **Chat assistant v1:** chat panel + ~10 fixed intents over the
+  insights engine + intent-miss logging
+- Smart reminders (on-device, honest platform-support copy)
+- Recurring templates
+- Payment rail integrated per §5.1 findings
 - Pro private beta: 20 users, real payment, real feedback
-- README rewrite + GitHub Sponsors page
 
-### Q4 — Revenue validation
-- Public Pro launch at $4/mo
-- Show HN launch (only if Q3 has real retention numbers)
-- **Decision point:** continue solo, hire part-time content writer, or
-  declare it a hobby. Honest answer either way.
-
-WhatsApp, white-label, and the SEO content engine are all year 2.
+### Months 8–12 — Revenue validation
+- Public Pro launch (price set by §5.1)
+- Monthly insights; Saver-trial pipeline live
+- Show HN (only with real retention numbers)
+- **Decision point:** continue, hire part-time help, or declare it a
+  hobby. Honest answer either way.
 
 ---
 
@@ -328,36 +354,41 @@ WhatsApp, white-label, and the SEO content engine are all year 2.
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Regex parser fails on real input | Medium | High | Ship to 10 friends-and-family first; iterate before public launch |
-| localStorage data loss → negative WOM | High | High | **Day-7 auto-backup + persistent banner (Q1 blocking)** |
-| Telegram bans bot or changes API | Low | High | Web app is independent; WhatsApp as Phase 2 fallback |
-| Bigger player copies the bot | Medium | Medium | Brand + open source trust + iteration speed |
-| Solo founder burnout in Q3 | Medium | High | Cut Q1 to 3 items; defer SEO/white-label to year 2 |
-| BD fintech regulatory attention | Low | Medium | We don't move money or hold accounts. Add one-paragraph compliance page. |
-| Pro conversion < 0.5% | Medium | Medium | Plan must survive ~$2K year-1 revenue. If it doesn't, this is a hobby — own it. |
-| Google changes Sheets API/OAuth scopes | Low–Med | High | Abstract storage layer; CSV export always available |
+| Regex parser fails on real input | Medium | High | 10-user corpus **before** launch; parse-failure logging after |
+| Chat assistant scope creep | High | Medium | Fixed ~10-intent list + miss logging (§3.2); new intents only from miss data |
+| localStorage data loss → negative WOM | High | High | PLAN-LOST-LUGGAGE ships first; day-7 auto-backup; banner |
+| **No viable payment rail in BD** | **Medium** | **High** | **Resolve §5.1 on paper before any Pro build; change geo/price/tier if needed** |
+| **Solo founder burnout / isolation** | **High (occurred July 2026)** | **High** | Weekly user contact as a work item; community from month 1; zero-cost architecture means pausing is always safe |
+| **No external reach channel hurts retention** | Medium | High | Streak psychology + on-device notifications first; if data proves external push is required, design the stateless push relay (subscriptions only, no financial data, published design) — decided on evidence, not assumption |
+| iOS PWA notification limits | High | Medium | Honest settings copy; iOS users get in-app nudges; don't build features that pretend otherwise |
+| Bigger player copies it | Medium | Medium | Own the §3.4 sentence; open source trust; "no backend" is hard for incumbents to copy honestly |
+| Google Sheets API / OAuth scope changes | Low–Med | High | Storage layer already abstracted; CSV export always available |
+| Pro conversion < 0.5% | Medium | Medium | Plan must survive ~$2K year 1 — §5.4 answers whether that's acceptable |
 
 ---
 
 ## 10. The North Star
 
-**Mission.** Help one billion people see where their money goes —
-without asking for their bank, their identity, or their money.
+**Mission.** Help cash-first users see where their money goes — without
+asking for their bank, their identity, or their data.
 
 **Vision.** *Be the default answer when someone asks "is there a
 budgeting app that isn't trying to sell me something?"*
 
 **Three principles that don't move:**
 
-1. **The user owns the data.** Period. Data lives in their Google
-   Sheet. We are the plumbing, not the vault.
-2. **The core product is free, forever.** Pro adds a different
-   interaction paradigm. It does not gate features that should just
-   exist.
+1. **The user owns the data.** Data lives in their Google Sheet. We are
+   the plumbing, not the vault. v2.3 makes this absolute: there is no
+   backend at all.
+2. **The core product is free, forever — including the habit loop.**
+   Pro sells understanding and automation, never the features that make
+   tracking work.
 3. **Privacy is a feature, not a marketing line.** If we must choose
-   between revenue and privacy, privacy wins.
+   between revenue and privacy, privacy wins. (This is why the bot is
+   gone.)
 
 ---
 
-*Plan v2.1 written: May 2026. Revisit: August 2026.
-Kill-criterion review: 60 days after bot launch.*
+*Plan v2.3 written: July 2026 (supersedes v2.2 — in git history).
+Revisit: after the 10-user parser week, or October 2026, whichever comes
+first. Kill-criterion review: 60 days after quick-add launch.*

@@ -16,7 +16,17 @@ export const STORAGE_KEYS = Object.freeze({
     // expenseSheetId is namespaced per-email: `expenseSheetId:${email}`
     SHEET_ID_PREFIX: 'expenseSheetId:',
     LAST_SYNC_TIME: 'lastSyncTime',
-    SYNC_QUEUE: 'syncQueue'
+    SYNC_QUEUE: 'syncQueue',
+    // Assistant keys live outside the `settings` object on purpose:
+    // storage.saveSettings() mirrors settings to the user's Google Sheet,
+    // and the API key / entitlement state must never leave this browser.
+    ASSISTANT_API_KEY: 'assistantApiKey',
+    ASSISTANT_PROVIDER: 'assistantProvider',
+    ASSISTANT_MODEL: 'assistantModel',
+    ASSISTANT_TRIAL_START: 'assistantTrialStart',
+    ASSISTANT_LICENSE_KEY: 'assistantLicenseKey',
+    ASSISTANT_LOG: 'assistantLog',
+    ASSISTANT_ONBOARDED: 'assistantOnboarded'
 });
 
 /** Default settings applied for new users / when localStorage is empty. */

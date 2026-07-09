@@ -38,10 +38,17 @@
             from '../js/core/format.js';
         import { store } from '../js/core/store.js';
         import { EVENTS } from '../js/core/events.js';
+        import { sameExpense, resolveConflictQueue } from '../js/features/sync/sync.model.js';
+        import { parse } from '../js/features/assistant/parser.js';
+        import { DEFAULT_CATEGORIES } from '../js/core/constants.js';
 
         const results = [];
         function t(name, fn) {
             try { fn(); results.push({ name, ok: true }); }
+            catch (err) { results.push({ name, ok: false, err: String(err) }); }
+        }
+        async function tAsync(name, fn) {
+            try { await fn(); results.push({ name, ok: true }); }
             catch (err) { results.push({ name, ok: false, err: String(err) }); }
         }
         function assertEq(actual, expected, msg = '') {
@@ -298,20 +305,344 @@
         });
 
         // ---- render --------
-        const summary = document.getElementById('summary');
-        const ol = document.getElementById('results');
-        const failed = results.filter(r => !r.ok);
-        summary.innerHTML = failed.length === 0
-            ? `<span class="ok">✓ ${results.length}/${results.length} passed</span>`
-            : `<span class="fail">✗ ${failed.length} failed</span> · ${results.length - failed.length} passed`;
+        function renderResults() {
+            const summary = document.getElementById('summary');
+            const ol = document.getElementById('results');
+            const failed = results.filter(r => !r.ok);
+            summary.innerHTML = failed.length === 0
+                ? `<span class="ok">✓ ${results.length}/${results.length} passed</span>`
+                : `<span class="fail">✗ ${failed.length} failed</span> · ${results.length - failed.length} passed`;
 
-        for (const r of results) {
-            const li = document.createElement('li');
-            li.innerHTML = r.ok
-                ? `<span class="ok">✓</span> ${r.name}`
-                : `<span class="fail">✗</span> ${r.name}<div class="fail-detail">${r.err.replace(/</g,'&lt;')}</div>`;
-            ol.appendChild(li);
+            for (const r of results) {
+                const li = document.createElement('li');
+                li.innerHTML = r.ok
+                    ? `<span class="ok">✓</span> ${r.name}`
+                    : `<span class="fail">✗</span> ${r.name}<div class="fail-detail">${r.err.replace(/</g,'&lt;')}</div>`;
+                ol.appendChild(li);
+            }
         }
+
+        (async () => {
+            // ---- sync.model ----
+            function confirmCounter(answer) {
+                const fn = async () => { fn.calls++; return answer; };
+                fn.calls = 0;
+                return fn;
+            }
+
+            await tAsync('sameExpense: identical record, different key order', async () => {
+                const a = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: 'Coffee & Snacks', amount: 5, description: 'latte', currency: 'USD', timestamp: 't1' };
+                const b = { date: today, category: 'Food & Dining', id: '1', subcategory: 'Coffee & Snacks', currency: 'USD', amount: 5, timestamp: 't2', description: 'latte', type: 'expense' };
+                assertEq(sameExpense(a, b), true);
+            });
+            await tAsync('sameExpense: id number vs string, amount number vs string', async () => {
+                const a = { id: 123, type: 'expense', date: today, category: 'Shopping', subcategory: '', amount: 12.5, description: '', currency: 'USD' };
+                const b = { id: '123', type: 'expense', date: today, category: 'Shopping', subcategory: '', amount: '12.5', description: '', currency: 'USD' };
+                assertEq(sameExpense(a, b), true);
+                assertEq(sameExpense(a, { ...b, amount: '99' }), false);
+            });
+            await tAsync('sameExpense: legacy remote type "" matches via effectiveType', async () => {
+                const a = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD' };
+                const b = { id: '1', type: '', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD' };
+                assertEq(sameExpense(a, b), true);
+            });
+            await tAsync('resolveConflictQueue: add matching remote → no confirm, no duplicate', async () => {
+                const confirmFn = confirmCounter(true);
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD', timestamp: 't1' }];
+                const queue = [{ action: 'add', id: '1', expense: { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD' } }];
+                const out = await resolveConflictQueue(remote, queue, null, confirmFn);
+                assertEq(confirmFn.calls, 0);
+                assertEq(out.length, 1);
+            });
+            await tAsync('resolveConflictQueue: add same id different amount → confirm called', async () => {
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD', timestamp: 't1' }];
+                const local = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 99, description: '', currency: 'USD' };
+                const queue = [{ action: 'add', id: '1', expense: local }];
+
+                const keepLocal = confirmCounter(true);
+                const outLocal = await resolveConflictQueue(remote, queue, null, keepLocal);
+                assertEq(keepLocal.calls, 1);
+                assertEq(outLocal.find(e => e.id === '1').amount, 99);
+
+                const keepCloud = confirmCounter(false);
+                const outCloud = await resolveConflictQueue(remote, queue, null, keepCloud);
+                assertEq(keepCloud.calls, 1);
+                assertEq(outCloud.find(e => e.id === '1').amount, 5);
+            });
+            await tAsync('resolveConflictQueue: update, remote untouched since lastSync → auto-applies local', async () => {
+                const lastSync = new Date(Date.now() - 60000);
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'old', currency: 'USD', timestamp: new Date(Date.now() - 120000).toISOString() }];
+                const local = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'new', currency: 'USD' };
+                const queue = [{ action: 'update', id: '1', expense: local }];
+                const confirmFn = confirmCounter(true);
+                const out = await resolveConflictQueue(remote, queue, lastSync, confirmFn);
+                assertEq(confirmFn.calls, 0);
+                assertEq(out.find(e => e.id === '1').description, 'new');
+            });
+            await tAsync('resolveConflictQueue: update, remote newer than lastSync → confirm called', async () => {
+                const lastSync = new Date(Date.now() - 60000);
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'cloud-edit', currency: 'USD', timestamp: new Date().toISOString() }];
+                const local = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'local-edit', currency: 'USD' };
+                const queue = [{ action: 'update', id: '1', expense: local }];
+
+                const keepLocal = confirmCounter(true);
+                const outLocal = await resolveConflictQueue(remote, queue, lastSync, keepLocal);
+                assertEq(keepLocal.calls, 1);
+                assertEq(outLocal.find(e => e.id === '1').description, 'local-edit');
+
+                const keepCloud = confirmCounter(false);
+                const outCloud = await resolveConflictQueue(remote, queue, lastSync, keepCloud);
+                assertEq(keepCloud.calls, 1);
+                assertEq(outCloud.find(e => e.id === '1').description, 'cloud-edit');
+            });
+            await tAsync('resolveConflictQueue: update whose id missing remotely → confirm called', async () => {
+                const local = { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD' };
+                const queue = [{ action: 'update', id: '1', expense: local }];
+
+                const restore = confirmCounter(true);
+                const outRestore = await resolveConflictQueue([], queue, null, restore);
+                assertEq(restore.calls, 1);
+                assertEq(outRestore.length, 1);
+
+                const stayDeleted = confirmCounter(false);
+                const outDeleted = await resolveConflictQueue([], queue, null, stayDeleted);
+                assertEq(stayDeleted.calls, 1);
+                assertEq(outDeleted.length, 0);
+            });
+            await tAsync('resolveConflictQueue: delete, remote edited after lastSync → confirm called', async () => {
+                const lastSync = new Date(Date.now() - 60000);
+                const remote = [{ id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: '', currency: 'USD', timestamp: new Date().toISOString() }];
+                const queue = [{ action: 'delete', id: '1' }];
+
+                const keepDelete = confirmCounter(false);
+                const outDeleted = await resolveConflictQueue(remote, queue, lastSync, keepDelete);
+                assertEq(keepDelete.calls, 1);
+                assertEq(outDeleted.length, 0);
+
+                const keepCloud = confirmCounter(true);
+                const outKept = await resolveConflictQueue(remote, queue, lastSync, keepCloud);
+                assertEq(keepCloud.calls, 1);
+                assertEq(outKept.length, 1);
+            });
+            await tAsync('resolveConflictQueue: delete/all keeps entries created after wipe timestamp', async () => {
+                const wipeTime = new Date(Date.now() - 60000).toISOString();
+                const remote = [
+                    { id: '1', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'before wipe', currency: 'USD', timestamp: new Date(Date.now() - 120000).toISOString() },
+                    { id: '2', type: 'expense', date: today, category: 'Food & Dining', subcategory: '', amount: 5, description: 'after wipe', currency: 'USD', timestamp: new Date().toISOString() }
+                ];
+                const queue = [{ action: 'delete', id: 'all', timestamp: wipeTime }];
+                const confirmFn = confirmCounter(true);
+                const out = await resolveConflictQueue(remote, queue, null, confirmFn);
+                assertEq(confirmFn.calls, 0);
+                assertEq(out.length, 1);
+                assertEq(out[0].id, '2');
+            });
+
+            // ---- assistant parser (XpenseBot) --------------------------------
+            // Corpus rule: ≥85% of these must parse exactly; everything else
+            // must fail SAFELY (needsReview/unmatched), never a silent wrong entry.
+            const pctx = { categories: DEFAULT_CATEGORIES, todayStr: today, currencyCode: 'BDT' };
+            const dayShift = (n) => {
+                const [y, m, d] = today.split('-').map(Number);
+                return getLocalDateString(new Date(y, m - 1, d - n));
+            };
+            const yesterday = dayShift(1);
+            const lastMonday = (() => {
+                const [y, m, d] = today.split('-').map(Number);
+                const diff = (new Date(y, m - 1, d).getDay() - 1 + 7) % 7;
+                return dayShift(diff);
+            })();
+
+            t('parser: multi-entry, trailing date word applies to all', () => {
+                const { entries, unmatched } = parse('lunch 150, rickshaw 40, tea 20 yesterday', pctx);
+                assertEq(entries.length, 3);
+                assertEq(unmatched.length, 0);
+                assertEq(entries.map(e => e.amount), [150, 40, 20]);
+                assertEq(entries.every(e => e.date === yesterday), true, 'all dated yesterday');
+                assertEq(entries[0].category, 'Food & Dining');
+                assertEq(entries[1].category, 'Transportation');
+            });
+            t('parser: salary → Income›Salary, no review flag', () => {
+                const { entries } = parse('salary 30000', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].category, 'Income');
+                assertEq(entries[0].subcategory, 'Salary');
+                assertEq(entries[0].needsReview, false);
+            });
+            t('parser: weekday resolves to most recent occurrence', () => {
+                const { entries } = parse('groceries 900 monday', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].date, lastMonday);
+                assertEq(entries[0].subcategory, 'Groceries');
+            });
+            t('parser: thousand-separator comma is not a split point', () => {
+                const { entries } = parse('rent 1,200', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 1200);
+                assertEq(entries[0].subcategory, 'Rent/Mortgage');
+            });
+            t('parser: "and" splits when both sides have amounts', () => {
+                const { entries } = parse('tea 20 and bus 50', pctx);
+                assertEq(entries.length, 2);
+                assertEq(entries[1].category, 'Transportation');
+            });
+            t('parser: "and" kept whole when one side has no amount', () => {
+                const { entries } = parse('lunch and coffee with client for 450', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 450);
+            });
+            t('parser: three-way "and" chain with amounts splits into 3', () => {
+                const { entries } = parse('groceries 500 and fish 350 from agora and paid internet bill 1200', pctx);
+                assertEq(entries.length, 3);
+                assertEq(entries[0].subcategory, 'Groceries');
+                assertEq(entries[2].subcategory, 'Internet');
+            });
+            t('parser: Bengali digits normalize', () => {
+                const { entries } = parse('৫০ rickshaw', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 50);
+                assertEq(entries[0].category, 'Transportation');
+            });
+            t('parser: "50k" shorthand → 50000', () => {
+                const { entries } = parse('salary 50k', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 50000);
+            });
+            t('parser: unknown word falls back to Other with review flag', () => {
+                const { entries } = parse('zzqx 75', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].category, 'Other');
+                assertEq(entries[0].needsReview, true);
+            });
+            t('parser: no amount → unmatched, never an invented entry', () => {
+                const { entries, unmatched } = parse('hello there', pctx);
+                assertEq(entries.length, 0);
+                assertEq(unmatched.length, 1);
+            });
+            t('parser: month names not parsed — today, text kept in description', () => {
+                const { entries } = parse('internet bill 1200 for july', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].date, today);
+                assertEq(entries[0].subcategory, 'Internet');
+                assert(entries[0].description.toLowerCase().includes('july'), 'description keeps "july"');
+            });
+            t('parser: refund forces review flag (financial-meaning ambiguity)', () => {
+                const { entries } = parse('refund 500', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].needsReview, true);
+            });
+            t('parser: foreign currency symbol flags review (BDT settings)', () => {
+                const { entries } = parse('lunch $12', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 12);
+                assertEq(entries[0].needsReview, true);
+            });
+            t('parser: emoji-only text still yields a safe entry', () => {
+                const { entries } = parse('🍔 350', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 350);
+            });
+
+            // ---- parser v2: income guard, phrases, folding, Banglish ---------
+            t('parser: income guard — "gift" never flips to income', () => {
+                const { entries } = parse('birthday gift 800', pctx);
+                assertEq(entries[0].category, 'Shopping');
+                assertEq(entries[0].subcategory, 'Gifts');
+                assertEq(entries[0].needsReview, true, 'income collision is flagged');
+            });
+            t('parser: income-only word without intent fails safe', () => {
+                const { entries } = parse('investment 5000', pctx);
+                assertEq(entries[0].category, 'Other');
+                assertEq(entries[0].needsReview, true);
+            });
+            t('parser: explicit intent still yields income', () => {
+                const { entries } = parse('received gift 500', pctx);
+                assertEq(entries[0].category, 'Income');
+                assertEq(entries[0].subcategory, 'Gift');
+            });
+            t('parser: "got paid 20k" → Income with no category word', () => {
+                const { entries } = parse('got paid 20k', pctx);
+                assertEq(entries[0].category, 'Income');
+                assertEq(entries[0].amount, 20000);
+                assertEq(entries[0].needsReview, false);
+            });
+            t('parser: bare "paid" is spending, not income', () => {
+                const { entries } = parse('paid internet bill 1200', pctx);
+                assertEq(entries[0].category, 'Bills & Utilities');
+                assertEq(entries[0].subcategory, 'Internet');
+            });
+            t('parser: phrase override — gas bill is a utility, bare gas flagged', () => {
+                const bill = parse('gas bill 800', pctx).entries[0];
+                assertEq(bill.category, 'Bills & Utilities');
+                assertEq(bill.needsReview, false);
+                const bare = parse('gas 200', pctx).entries[0];
+                assertEq(bare.needsReview, true, 'bare gas is ambiguous in BD');
+            });
+            t('parser: singular/plural folding matches taxonomy', () => {
+                const { entries } = parse('concert ticket 2000', pctx);
+                assertEq(entries[0].category, 'Entertainment');
+                assertEq(entries[0].subcategory, 'Concerts/Events');
+            });
+            t('parser: canonical nightly capture line', () => {
+                const { entries } = parse('breakfast 120, rickshaw 50, lunch 350, medicine 500 and got paid 20k', pctx);
+                assertEq(entries.length, 5);
+                assertEq(entries.map(e => e.category),
+                    ['Food & Dining', 'Transportation', 'Food & Dining', 'Healthcare', 'Income']);
+                assertEq(entries[4].amount, 20000);
+            });
+
+            // ---- corpus ratchet ----------------------------------------------
+            // Two hard rules: (a) silent-wrong rate is ZERO — a wrong category
+            // may only ship carrying needsReview:true; (b) category accuracy
+            // never drops below the floor. Raise the floor as the synonym pack
+            // grows; never lower it.
+            const CORPUS = [
+                ['eggs 120', 'Food & Dining'], ['milk 90', 'Food & Dining'],
+                ['chal 2200', 'Food & Dining'], ['dal 140', 'Food & Dining'],
+                ['bazar 1500', 'Food & Dining'], ['chicken 350', 'Food & Dining'],
+                ['beef 800', 'Food & Dining'], ['onion 60', 'Food & Dining'],
+                ['iftar 300', 'Food & Dining'], ['fuchka 100', 'Food & Dining'],
+                ['burger 450', 'Food & Dining'], ['pizza 900', 'Food & Dining'],
+                ['foodpanda 650', 'Food & Dining'], ['mishti 400', 'Food & Dining'],
+                ['dinner at kfc 850', 'Food & Dining'],
+                ['gas bill 800', 'Bills & Utilities'], ['bill 500', 'Bills & Utilities'],
+                ['wasa bill 450', 'Bills & Utilities'], ['desco bill 1200', 'Bills & Utilities'],
+                ['current bill 900', 'Bills & Utilities'], ['dish bill 300', 'Bills & Utilities'],
+                ['launch ticket 450', 'Transportation'], ['train ticket 320', 'Transportation'],
+                ['bike servicing 500', 'Transportation'], ['parking 50', 'Transportation'],
+                ['car wash 300', 'Transportation'],
+                ['panjabi 1800', 'Shopping'], ['saree 3500', 'Shopping'],
+                ['t-shirt 600', 'Shopping'], ['headphones 2500', 'Shopping'],
+                ['mobile cover 250', 'Shopping'],
+                ['shampoo 320', 'Personal Care'], ['soap 60', 'Personal Care'],
+                ['facial 800', 'Personal Care'],
+                ['netflix 1100', 'Entertainment'], ['spotify 200', 'Entertainment'],
+                ['concert ticket 2000', 'Entertainment'], ['cricket match ticket 600', 'Entertainment'],
+                ['napa 30', 'Healthcare'], ['dentist 2000', 'Healthcare'],
+                ['blood test 1500', 'Healthcare'],
+                ['course fee 5000', 'Education'], ['notebook 120', 'Education'],
+                ['pen 20', 'Education'],
+                ['air ticket 12000', 'Travel'],
+                ['donation 500', 'Other'], ['zakat 5000', 'Other'],
+                ['birthday gift 800', 'Shopping'], ['gifts for niece 500', 'Shopping'],
+                ['freelance payment 20000', 'Income'], ['got paid 20k', 'Income']
+            ];
+            t('parser corpus: zero silent-wrong, category accuracy ≥ 85%', () => {
+                const silentWrong = [];
+                let catOk = 0;
+                for (const [msg, cat] of CORPUS) {
+                    const e = parse(msg, pctx).entries[0];
+                    if (!e) continue; // unmatched is a miss, never silent-wrong
+                    if (e.category === cat) catOk++;
+                    else if (!e.needsReview) silentWrong.push(`"${msg}" → ${e.category}`);
+                }
+                assertEq(silentWrong, [], 'silent wrong classifications');
+                const rate = catOk / CORPUS.length;
+                assert(rate >= 0.85, `category accuracy ${(rate * 100).toFixed(0)}% is below the 85% floor`);
+            });
+
+            renderResults();
+        })();
     </script>
 </body>
 </html>
