@@ -11,8 +11,7 @@ import { $, $$, on, delegate, el, setVisible } from '../../core/dom.js';
 import { store } from '../../core/store.js';
 import { STORAGE_KEYS } from '../../core/constants.js';
 import { getLocalDateString, formatDate, formatCurrency } from '../../core/format.js';
-import { add } from '../expenses/actions.js';
-import { isIncomeCategory } from '../categories/categories.model.js';
+import { commitEntries } from './commit-entries.js';
 import { parse } from './parser.js';
 import { extractWithLLM } from './engine-llm.js';
 import { DEFAULT_MODELS } from './providers.js';
@@ -272,22 +271,7 @@ function onConfirm(_ev, btn) {
     const selected = checkedIdx.map(i => rec.entries[i]).filter(Boolean);
 
     const currency = store.getState().settings?.currency;
-    const base = Date.now();
-    const okIds = [];
-    const errors = [];
-    selected.forEach((e, i) => {
-        const res = add({
-            id: String(base + i),
-            date: e.date,
-            category: e.category,
-            subcategory: e.subcategory,
-            amount: e.amount,
-            description: e.description,
-            currency
-        }, { isIncomeCategory });
-        if (res.ok) okIds.push(res.expense.id);
-        else errors.push(`${e.description || e.subcategory}: ${res.error}`);
-    });
+    const { okIds, errors } = commitEntries(selected, { currency });
 
     markOutcome(rec.logId, {
         acceptedIds: okIds,
