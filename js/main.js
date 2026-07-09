@@ -4,10 +4,12 @@
 
 import { store } from './core/store.js';
 import { loadAll } from './services/local-store.js';
-import './services/auth.js';      // sets window.auth (sanctioned global)
-import './services/sheets-api.js'; // sets window.sheetsApi (sanctioned global)
-import './services/storage.js';   // sets window.storage (sanctioned global)
-import './services/dialog.js';    // sets window.dialog (sanctioned global)
+// Services are imported directly by their consumers; these side-effect
+// imports only guarantee the window.* debug mirrors exist for DevTools.
+import './services/auth.js';
+import './services/sheets-api.js';
+import './services/storage.js';
+import './services/dialog.js';
 import { log } from './core/log.js';
 import { mount as mountExpenses } from './features/expenses/index.js';
 import { mount as mountAddModal } from './features/expenses/add-modal.js';

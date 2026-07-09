@@ -1,8 +1,8 @@
 // js/features/auth/index.js
-// Google OAuth + landing + profile-page widget. Wraps the legacy
-// `window.auth` and `window.sheetsApi` services until they too are
-// migrated to ES modules.
+// Google OAuth + landing + profile-page widget.
 
+import { auth } from '../../services/auth.js';
+import { sheetsApi } from '../../services/sheets-api.js';
 import { store } from '../../core/store.js';
 import { EVENTS } from '../../core/events.js';
 import { $ } from '../../core/dom.js';
@@ -18,10 +18,6 @@ const $log = log('auth');
 
 const AUTH_MODE_KEY = STORAGE_KEYS.AUTH_MODE;
 const LAST_EMAIL_KEY = STORAGE_KEYS.LAST_SIGNED_IN_EMAIL;
-
-function w() { return /** @type {any} */ (window); }
-function getAuth()      { return w().auth; }
-function getSheetsApi() { return w().sheetsApi; }
 
 function getAuthMode() {
     try { return localStorage.getItem(AUTH_MODE_KEY); } catch (_) { return null; }
@@ -80,7 +76,6 @@ export function wipeLocalData({ keepSettings = false } = {}) {
 }
 
 async function activateCloudBackend({ initial = false } = {}) {
-    const auth = getAuth();
 
     try {
         updateSyncStatus('syncing');
@@ -135,7 +130,6 @@ async function activateCloudBackend({ initial = false } = {}) {
 }
 
 function setupLanding() {
-    const auth = getAuth();
     const signinBtn = $('#landing-signin-btn');
     const guestBtn = $('#landing-guest-btn');
 
@@ -163,7 +157,6 @@ function setupLanding() {
 }
 
 function setupAuthUi() {
-    const auth = getAuth();
 
     const signinBtn        = $('#signin-btn');
     const profileBtn       = $('#auth-trigger');
@@ -295,9 +288,7 @@ function setAvatar(imgEl, fallbackEl, url) {
 }
 
 export function renderAuthUi() {
-    const auth = getAuth();
     if (!auth) return;
-    const sheetsApi = getSheetsApi();
 
     const signinBtn = $('#signin-btn');
     const profileEl = $('#auth-profile');
@@ -382,8 +373,7 @@ export function renderAuthUi() {
 }
 
 async function initAuthAndStorage() {
-    const auth = getAuth();
-    const clientId = w().GOOGLE_OAUTH_CLIENT_ID;
+    const clientId = /** @type {any} */ (window).GOOGLE_OAUTH_CLIENT_ID;
     const configured = await auth.init(clientId);
 
     auth.onChange(renderAuthUi);

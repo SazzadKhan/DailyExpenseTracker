@@ -28,11 +28,12 @@ under [js/services/](js/services) and [js/features/](js/features). The
 `<script type="module" src="js/main.js">` is the only script tag for app
 code in [index.html](index.html).
 
-- **All code is ES modules** (`import` / `export`).
-- A handful of services still mirror themselves on `window.*` for cross-
-  module convenience (`window.auth`, `window.sheetsApi`, `window.storage`,
-  `window.dialog`, `window.fx`). New code should import these directly
-  rather than reaching through `window`.
+- **All code is ES modules** (`import` / `export`). Every consumer imports
+  services directly from `js/services/` (or `js/features/effects/`).
+- The services still mirror themselves on `window.*` (`window.auth`,
+  `window.sheetsApi`, `window.storage`, `window.dialog`, `window.fx`) —
+  **for DevTools debugging only**. No app code reads them; never add a
+  `window.*` read.
 
 See [docs/REFACTOR_ROADMAP.md](docs/REFACTOR_ROADMAP.md) for the migration
 log.
@@ -74,11 +75,9 @@ docs/
    `js/features/<area>/`. If you find a function that looks like it should
    exist somewhere, search [js/](js) first.
 2. **All new code must be ES modules** (`import` / `export`). Do not add to
-   `window.*` globals. The five legacy services (`auth`, `sheetsApi`,
-   `storage`, `dialog`, `fx`) still mirror themselves on `window` for
-   cross-service convenience but new code should `import` them from
-   `js/services/` (or `js/features/effects/`) instead of reaching through
-   `window`.
+   `window.*` globals, and never read services through `window` — always
+   `import` them from `js/services/` (or `js/features/effects/`). The
+   `window.*` mirrors that the services set are DevTools-only.
 3. **State changes go through the store.** Read with `store.getState()`,
    write with `store.update(patch)` or domain actions
    (e.g. `addExpense(exp)`). Never mutate `state.expenses` in place.
