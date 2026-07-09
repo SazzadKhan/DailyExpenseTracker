@@ -66,3 +66,15 @@ export function markOutcome(logId, { acceptedIds = [], deselectedCount = 0, canc
 export function getLog() {
     return readLog();
 }
+
+/**
+ * The audit log as a pretty-printed JSON string. This is the raw material
+ * for the 10-user test learning loop: what people typed vs what the parser
+ * did with it. Trigger a download from DevTools with
+ * `window.__xpenseExportLog()` (wired in js/features/capture/index.js), or
+ * call this to hand the string somewhere else.
+ * @returns {string}
+ */
+export function exportLog() {
+    return JSON.stringify(readLog(), null, 2);
+}

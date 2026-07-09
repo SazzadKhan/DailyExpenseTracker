@@ -1,0 +1,137 @@
+/* css/components/capture.css
+   Quick-capture box: the free-tier home-screen hero. Uses tokens.css
+   variables so every theme works. Deliberately calm — this is a receipt,
+   not a chat. */
+
+.capture-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-md);
+}
+
+.capture-label {
+    display: block;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.capture-input {
+    width: 100%;
+    resize: vertical;
+    min-height: 48px;
+    padding: 10px 12px;
+    font: inherit;
+    color: var(--text-primary);
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-sizing: border-box;
+}
+.capture-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+.capture-input::placeholder {
+    color: var(--text-muted);
+}
+
+.capture-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+}
+.capture-hint {
+    color: var(--text-secondary);
+    font-size: 0.85em;
+}
+.capture-submit {
+    flex-shrink: 0;
+    padding: 9px 18px;
+    font: inherit;
+    font-weight: 600;
+    color: #fff;
+    background: var(--primary);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.capture-submit:hover { background: var(--primary-dark); }
+
+/* ---- receipt ---- */
+
+.capture-receipt {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+.capture-receipt[hidden] { display: none; }
+
+.cap-summary {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.cap-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.cap-row-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+    padding: 8px 10px;
+    background: var(--bg-input);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font: inherit;
+    color: var(--text-primary);
+    transition: var(--transition);
+}
+.cap-row-main:hover { border-color: var(--border-light); }
+.cap-row.cap-review .cap-row-main {
+    border-color: var(--warning, #f59e0b);
+    background: color-mix(in srgb, var(--warning, #f59e0b) 12%, var(--bg-input));
+}
+.cap-main { font-weight: 500; }
+.cap-meta { color: var(--text-secondary); font-size: 0.85em; }
+
+.cap-undo {
+    flex-shrink: 0;
+    width: 38px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 15px;
+    transition: var(--transition);
+}
+.cap-undo:hover {
+    color: var(--danger, #ef4444);
+    border-color: var(--danger, #ef4444);
+}
+
+.cap-note {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    margin-top: 8px;
+}
+.cap-note em { color: var(--text-primary); font-style: italic; }
+.cap-error {
+    color: var(--danger, #ef4444);
+    font-size: 0.9em;
+    margin-top: 6px;
+}
