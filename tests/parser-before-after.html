@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Parser efficiency — before vs after the learning layer</title>
+    <style>
+        :root {
+            --surface: #0f172a;
+            --card: #16213b;
+            --ink: #f8fafc;
+            --ink-2: #94a3b8;
+            --ink-muted: #64748b;
+            --grid: #1e293b;
+            --axis: #334155;
+            --series-1: #3987e5;  /* static parser (before) */
+            --series-2: #199e70;  /* with learning (after) */
+            --good: #0ca30c;
+            --warn: #fbbf24;
+        }
+        body { font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 24px; background: var(--surface); color: var(--ink); max-width: 900px; margin: 0 auto; }
+        h1 { margin: 0 0 4px; font-size: 22px; }
+        h2 { font-size: 15px; margin: 26px 0 8px; }
+        .sub { color: var(--ink-2); margin: 0 0 18px; }
+        .tiles { display: flex; gap: 12px; flex-wrap: wrap; margin: 18px 0; }
+        .tile { flex: 1 1 180px; background: var(--card); border: 1px solid var(--grid); border-radius: 10px; padding: 14px 16px; }
+        .tile .val { font-size: 28px; font-weight: 650; }
+        .tile .lbl { color: var(--ink-2); font-size: 12.5px; margin-top: 2px; }
+        .tile .delta { font-size: 13px; margin-top: 4px; color: var(--good); font-weight: 600; }
+        .arrow { color: var(--ink-muted); font-size: 20px; font-weight: 400; }
+        .chart-card { background: var(--card); border: 1px solid var(--grid); border-radius: 10px; padding: 16px; position: relative; }
+        .legend { display: flex; gap: 18px; margin-bottom: 8px; font-size: 13px; color: var(--ink-2); }
+        .chip { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+        svg text { font: 11px system-ui, sans-serif; fill: var(--ink-muted); }
+        svg .endlbl { font-size: 12px; fill: var(--ink-2); font-weight: 600; }
+        #tip { position: absolute; pointer-events: none; background: #0b1222; border: 1px solid var(--axis); border-radius: 6px; padding: 6px 10px; font-size: 12px; display: none; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+        #tip b { font-variant-numeric: tabular-nums; }
+        table { border-collapse: collapse; width: 100%; margin: 8px 0; font-variant-numeric: tabular-nums; }
+        th, td { text-align: right; padding: 4px 10px; border-bottom: 1px solid var(--grid); font-size: 13px; }
+        th { color: var(--ink-2); font-weight: 500; }
+        th:first-child, td:first-child { text-align: left; }
+        .flag { color: var(--warn); }
+        .good { color: var(--good); }
+        .ex { background: var(--card); border: 1px solid var(--grid); border-radius: 10px; padding: 12px 16px; margin: 10px 0; }
+        .line { display: inline-block; background: #1e293b; padding: 3px 9px; border-radius: 6px; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+        .note { color: var(--ink-2); font-size: 13px; }
+        details { margin: 10px 0; color: var(--ink-2); }
+        summary { cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Parser efficiency — before vs after</h1>
+    <p class="sub">A simulated 14-day diary (<span id="n-entries">…</span> entries, real Bangladeshi vocabulary, five personal
+       words the built-in pack does not know: <em>bkash, flexiload, tiffin, mess, coaching</em>) is replayed
+       through the <b>same live parser</b> twice: once as shipped before this update (static rules only), once
+       with the learning layer, where the simulated user simply confirms entries and taps “Create” when the bot
+       offers a new subcategory. Nothing below is hard-coded — every number is computed in your browser right now.</p>
+
+    <div class="tiles" id="tiles"></div>
+
+    <h2>Entries needing manual review (⚠), cumulative</h2>
+    <div class="chart-card">
+        <div class="legend">
+            <span><span class="chip" style="background:var(--series-1)"></span>Static parser (before)</span>
+            <span><span class="chip" style="background:var(--series-2)"></span>With learning (after)</span>
+        </div>
+        <div id="chart"></div>
+        <div id="tip"></div>
+    </div>
+
+    <h2>Same input, two weeks apart</h2>
+    <div class="ex" id="example"></div>
+
+    <h2>Day by day</h2>
+    <table id="daytable"></table>
+
+    <details>
+        <summary>The 14-day diary used (click to expand)</summary>
+        <pre id="diary" style="font-size:12px; line-height:1.6;"></pre>
+    </details>
+
+    <script type="module">
+        import { parse } from '../js/features/assistant/parser.js';
+        import {
+            emptyLearned, recordOutcomeIn, buildLearnedLookup, findSuggestion, acceptSuggestionIn
+        } from '../js/features/assistant/learned.js';
+        import { DEFAULT_CATEGORIES } from '../js/core/constants.js';
+        import { getLocalDateString } from '../js/core/format.js';
+
+        // ---- the diary --------------------------------------------------------
+        const DIARY = [
+            ['breakfast 80', 'rickshaw 40', 'cha 10', 'bkash 500', 'mess 1800'],
+            ['lunch 150', 'bus 25', 'bazar 1500', 'tiffin 60', 'flexiload 100'],
+            ['breakfast 70', 'uber 250', 'bkash 300', 'tiffin 60', 'coaching 2000'],
+            ['lunch 160', 'cha 10', 'bazar 900', 'tiffin 50', 'flexiload 100'],
+            ['grocery 700', 'rickshaw 30', 'dinner 320', 'bkash 1000', 'mess 200'],
+            ['internet bill 1200', 'lunch 140', 'cha 15', 'tiffin 60', 'flexiload 200'],
+            ['petrol 500', 'breakfast 90', 'napa 30', 'bkash 450'],
+            ['bazar 1100', 'coffee 180', 'bus 25', 'flexiload 100', 'coaching 500'],
+            ['lunch 170', 'rickshaw 45', 'egg 130', 'tiffin 60', 'bkash 800'],
+            ['cha 10', 'dinner 300', 'grocery 650', 'mess 1800', 'tiffin 50'],
+            ['breakfast 85', 'uber 260', 'milk 90', 'flexiload 150'],
+            ['lunch 150', 'bus 30', 'banana 60', 'bkash 600', 'tiffin 60'],
+            ['mobile recharge 200', 'cha 10', 'bazar 1300', 'flexiload 100', 'coaching 2000'],
+            ['breakfast 80', 'rickshaw 40', 'lunch 180', 'tiffin 60', 'mess 200']
+        ];
+
+        const today = getLocalDateString(new Date());
+        const dateOf = (day) => {           // day 1..14 → 13..0 days ago
+            const [y, m, d] = today.split('-').map(Number);
+            return getLocalDateString(new Date(y, m - 1, d - (14 - day)));
+        };
+
+        // ---- replay -----------------------------------------------------------
+        function replay(withLearning) {
+            let cats = DEFAULT_CATEGORIES;
+            const data = emptyLearned(dateOf(1));
+            const created = [];
+            const days = [];
+
+            for (let day = 1; day <= DIARY.length; day++) {
+                const dstr = dateOf(day);
+                const learned = withLearning ? buildLearnedLookup(data, cats) : null;
+                const entries = [];
+                for (const line of DIARY[day - 1]) {
+                    entries.push(...parse(line, {
+                        categories: cats, todayStr: dstr, currencyCode: 'BDT', learned
+                    }).entries);
+                }
+                days.push({
+                    day,
+                    total: entries.length,
+                    flagged: entries.filter(e => e.needsReview).length
+                });
+                if (withLearning) {
+                    recordOutcomeIn(data, entries, dstr);      // user confirms everything
+                    const sug = findSuggestion(data, cats, dstr);
+                    if (sug) {                                  // user taps “Create”
+                        cats = { ...cats, [sug.category]: {
+                            ...cats[sug.category],
+                            subcategories: [...cats[sug.category].subcategories, sug.label]
+                        } };
+                        acceptSuggestionIn(data, sug.word, sug.category, sug.label);
+                        created.push({ day, label: `${sug.category} › ${sug.label}` });
+                    }
+                }
+            }
+            return { days, created, cats, data };
+        }
+
+        const before = replay(false);
+        const after = replay(true);
+
+        const sum = (days, from, key) => days.filter(d => d.day >= from).reduce((a, d) => a + d[key], 0);
+        const total = sum(before.days, 1, 'total');
+        const pct = (n, d) => d ? Math.round(n / d * 1000) / 10 : 0;
+
+        const bAll = pct(sum(before.days, 1, 'flagged'), total);
+        const aAll = pct(sum(after.days, 1, 'flagged'), total);
+        const w2Total = sum(before.days, 8, 'total');
+        const bW2 = pct(sum(before.days, 8, 'flagged'), w2Total);
+        const aW2 = pct(sum(after.days, 8, 'flagged'), w2Total);
+
+        document.getElementById('n-entries').textContent = total;
+
+        // ---- stat tiles ---------------------------------------------------------
+        const tiles = [
+            { val: `${bW2}% <span class="arrow">→</span> ${aW2}%`,
+              lbl: 'entries flagged ⚠ in week 2 (steady state)',
+              delta: `−${Math.round((bW2 - aW2) / bW2 * 100)}% review effort` },
+            { val: `${bAll}% <span class="arrow">→</span> ${aAll}%`,
+              lbl: 'flagged ⚠ across the full 14 days (incl. learning period)',
+              delta: `−${Math.round((bAll - aAll) / bAll * 100)}% overall` },
+            { val: String(after.created.length),
+              lbl: 'subcategories suggested & created from usage alone',
+              delta: after.created.map(c => c.label.split(' › ')[1]).join(', ') }
+        ];
+        document.getElementById('tiles').innerHTML = tiles.map(t =>
+            `<div class="tile"><div class="val">${t.val}</div><div class="lbl">${t.lbl}</div><div class="delta">${t.delta}</div></div>`
+        ).join('');
+
+        // ---- cumulative chart ---------------------------------------------------
+        const cum = (days) => {
+            let f = 0, n = 0;
+            return days.map(d => { f += d.flagged; n += d.total; return pct(f, n); });
+        };
+        const sB = cum(before.days), sA = cum(after.days);
+
+        const W = 820, H = 240, L = 40, R = 130, T = 12, B = 28;
+        const yMax = 50;
+        const x = (i) => L + i * (W - L - R) / (DIARY.length - 1);
+        const y = (v) => T + (H - T - B) * (1 - v / yMax);
+        const path = (s) => s.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join(' ');
+
+        let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Cumulative review rate by day, static parser vs with learning">`;
+        for (let v = 0; v <= yMax; v += 10) {
+            svg += `<line x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+            svg += `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}%</text>`;
+        }
+        for (let i = 0; i < DIARY.length; i++) {
+            svg += `<text x="${x(i)}" y="${H - 10}" text-anchor="middle">${i + 1}</text>`;
+        }
+        svg += `<text x="${W - R + 8}" y="${H - 10}">day</text>`;
+        svg += `<line x1="${L}" y1="${y(0)}" x2="${W - R}" y2="${y(0)}" stroke="var(--axis)" stroke-width="1"/>`;
+        svg += `<path d="${path(sB)}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round"/>`;
+        svg += `<path d="${path(sA)}" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round"/>`;
+        svg += `<circle id="dotB" r="4" fill="var(--series-1)" stroke="var(--card)" stroke-width="2" style="display:none"/>`;
+        svg += `<circle id="dotA" r="4" fill="var(--series-2)" stroke="var(--card)" stroke-width="2" style="display:none"/>`;
+        svg += `<line id="xh" y1="${T}" y2="${y(0)}" stroke="var(--axis)" stroke-width="1" style="display:none"/>`;
+        const last = DIARY.length - 1;
+        svg += `<text class="endlbl" x="${x(last) + 8}" y="${y(sB[last]) + 4}">Static ${sB[last]}%</text>`;
+        svg += `<text class="endlbl" x="${x(last) + 8}" y="${y(sA[last]) + 4}">Learning ${sA[last]}%</text>`;
+        svg += `<rect id="hover" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"/>`;
+        svg += '</svg>';
+        document.getElementById('chart').innerHTML = svg;
+
+        const tip = document.getElementById('tip');
+        const hover = document.getElementById('hover');
+        const chartSvg = document.querySelector('#chart svg');
+        hover.addEventListener('mousemove', (ev) => {
+            const box = chartSvg.getBoundingClientRect();
+            const sx = W / box.width;
+            const px = (ev.clientX - box.left) * sx;
+            const i = Math.max(0, Math.min(last, Math.round((px - L) / ((W - L - R) / last))));
+            for (const [id, s] of [['dotB', sB], ['dotA', sA]]) {
+                const dot = document.getElementById(id);
+                dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(s[i])); dot.style.display = '';
+            }
+            const xh = document.getElementById('xh');
+            xh.setAttribute('x1', x(i)); xh.setAttribute('x2', x(i)); xh.style.display = '';
+            tip.innerHTML = `day ${i + 1} · cumulative ⚠ — static <b>${sB[i]}%</b>, learning <b>${sA[i]}%</b>`;
+            tip.style.display = 'block';
+            const card = tip.parentElement.getBoundingClientRect();
+            tip.style.left = Math.min(ev.clientX - card.left + 14, card.width - tip.offsetWidth - 8) + 'px';
+            tip.style.top = (ev.clientY - card.top - 34) + 'px';
+        });
+        hover.addEventListener('mouseleave', () => {
+            tip.style.display = 'none';
+            for (const id of ['dotB', 'dotA', 'xh']) document.getElementById(id).style.display = 'none';
+        });
+
+        // ---- same line, two weeks apart ------------------------------------------
+        const exLine = 'bkash 500';
+        const fmt = (e) => e
+            ? `${e.category} › ${e.subcategory} — ${e.amount} · confidence ${e.confidence}` +
+              (e.needsReview ? ' <span class="flag">⚠ needs review</span>' : ' <span class="good">✓ auto-filed</span>')
+            : '(no entry)';
+        const exBefore = parse(exLine, { categories: DEFAULT_CATEGORIES, todayStr: today, currencyCode: 'BDT' }).entries[0];
+        const exAfter = parse(exLine, {
+            categories: after.cats, todayStr: today, currencyCode: 'BDT',
+            learned: buildLearnedLookup(after.data, after.cats)
+        }).entries[0];
+        document.getElementById('example').innerHTML =
+            `<p><span class="line">${exLine}</span></p>` +
+            `<p>Day 1 (static parser): ${fmt(exBefore)}</p>` +
+            `<p>Day 14 (after learning): ${fmt(exAfter)}</p>` +
+            `<p class="note">No rules were edited and no model was called — the parser learned this user's word from their own confirmed entries.</p>`;
+
+        // ---- day-by-day table -----------------------------------------------------
+        const createdByDay = Object.fromEntries(after.created.map(c => [c.day, c.label]));
+        let rows = '<tr><th>day</th><th>entries</th><th>⚠ static</th><th>⚠ learning</th><th>cum. static</th><th>cum. learning</th><th style="text-align:left">subcategory created</th></tr>';
+        for (let i = 0; i < DIARY.length; i++) {
+            rows += `<tr><td>${i + 1}</td><td>${before.days[i].total}</td>` +
+                `<td>${before.days[i].flagged}</td><td>${after.days[i].flagged}</td>` +
+                `<td>${sB[i]}%</td><td>${sA[i]}%</td>` +
+                `<td style="text-align:left">${createdByDay[i + 1] || ''}</td></tr>`;
+        }
+        document.getElementById('daytable').innerHTML = rows;
+
+        document.getElementById('diary').textContent =
+            DIARY.map((lines, i) => `day ${String(i + 1).padStart(2)}: ${lines.join('  ·  ')}`).join('\n');
+    </script>
+</body>
+</html>
