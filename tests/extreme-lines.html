@@ -27,7 +27,9 @@
 <body>
     <h1>Extreme input lines — live parser demo</h1>
     <p class="sub">Every row below is produced by the <em>real</em> <code>parser.js</code> + <code>learned.js</code>
-       modules, right now, with default categories and BDT as the user currency. Nothing is mocked.</p>
+       modules, right now, with default categories and BDT as the user currency. Nothing is mocked.
+       Verdicts updated for parser v3 — see <a href="extreme-suite.html" style="color:#38bdf8">extreme-suite.html</a>
+       for the full 150-case before/after comparison.</p>
     <div id="out"></div>
 
     <script type="module">
@@ -106,20 +108,20 @@
 
         // ---- 1–10: parser stress ------------------------------------------------
 
-        parseCase('Last-number-wins amount bug', 'coffee 60 2 days ago',
-            '<span class="bad">LIMIT:</span> "2 days ago" is not date grammar, and the <b>last</b> number is taken as the amount — coffee logged for <b>2</b>, not 60, with no ⚠. Silent wrong amount.');
+        parseCase('Amount vs "2 days ago" (fixed in v3)', 'coffee 60 2 days ago',
+            '<span class="good">FIXED:</span> "2 days ago" is date grammar now, consumed <em>before</em> amount extraction — coffee logged for <b>60</b>, dated two days back. In v2 the last number won and this silently logged amount 2.');
 
-        parseCase('No-digit chunk blocks the "and" split', 'spent $25 on netflix and 1,200 tk internet bill and biryani',
-            '<span class="bad">LIMIT:</span> "biryani" has no number, so nothing splits — one entry, amount 1200, the $25 Netflix swallowed into the description. The $ vs BDT conflict at least flags ⚠.');
+        parseCase('No-digit chunk no longer blocks the "and" split', 'spent $25 on netflix and 1,200 tk internet bill and biryani',
+            '<span class="good">FIXED (mostly):</span> digit-less "biryani" now merges into its neighbour instead of blocking the split — two entries, Netflix $25 (⚠ currency conflict) + internet 1200. <span class="bad">LIMIT:</span> "biryani" rides along in the internet entry\'s description instead of asking for its own amount.');
 
-        parseCase('Bengali script words + Bengali "and"', '৳১২০ চা এবং ৫০ rickshaw',
-            '<span class="bad">LIMIT:</span> Bengali digits convert, but "এবং" (and) is not a split point and "চা" in Bengali script matches nothing — one entry, the 120 lost.');
+        parseCase('Bengali script words + Bengali "and" (fixed in v3)', '৳১২০ চা এবং ৫০ rickshaw',
+            '<span class="good">FIXED:</span> "এবং" splits, and the tokenizer keeps Bengali vowel signs inside words so "চা" matches the synonym pack — two entries, both high confidence.');
 
         parseCase('Income guard + k-shorthand + split', 'got paid salary 50k and gave zakat 5k',
             '<span class="good">SHOULD WORK:</span> both chunks have digits so "and" splits; income intent is per-segment. Expect Income›Salary 50000 + Other›Charity 5000.');
 
         parseCase('Negative amount', '-500 lunch refund',
-            '<span class="bad">LIMIT:</span> the minus sign is invisible to the amount regex — logged as <b>+500</b>. "refund" at least forces ⚠.');
+            '<span class="bad">LIMIT (now flagged):</span> still logged as <b>+500</b> — but v3 sees the minus sign itself and forces ⚠ even without the word "refund". Flag, never guess.');
 
         parseCase('Bare number, no words', '1200',
             'Safe but useless: Other ⚠ with a placeholder description.');
@@ -127,11 +129,11 @@
         parseCase('Zero amount', 'lunch 0',
             '<span class="good">FAILSAFE:</span> zero is rejected into <em>unmatched</em> — no entry invented.');
 
-        parseCase('Future date accepted', 'dinner 800 on 2026-12-31',
-            '<span class="bad">LIMIT:</span> there is no future-date guard — the literal date is trusted.');
+        parseCase('Future date accepted — but flagged (v3)', 'dinner 800 on 2026-12-31',
+            '<span class="good">GUARDED:</span> the literal date is still trusted (advance bookings are real), but a date after today now carries ⚠ so the preview asks before storing.');
 
-        parseCase('Category-name word hijacks a clearer synonym', 'netflix er bill 1100 taka dilam',
-            '<span class="bad">LIMIT:</span> "bill" is a word inside the category name <em>Bills &amp; Utilities</em>, and taxonomy beats the synonym pack — files as Bills &amp; Utilities, not Entertainment, unflagged.');
+        parseCase('Category-name word vs a clearer synonym (fixed in v3)', 'netflix er bill 1100 taka dilam',
+            '<span class="good">FIXED:</span> a single word borrowed from a multi-word category name ("bill") is now a weak <em>fragment</em> — subcategory-level evidence like "netflix" outranks it. Files under Entertainment › Streaming Services. Bare "bill 500" still reaches Bills &amp; Utilities.');
 
         parseCase('No duplicate detection', 'rent 1,200 and rent 1,200',
             '<span class="bad">LIMIT:</span> two identical entries, no dedupe warning.');
