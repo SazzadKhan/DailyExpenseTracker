@@ -17,9 +17,16 @@ anything unreadable lands in `unmatched` instead of becoming an entry.
 
 | Rule | Input | Becomes |
 |---|---|---|
+| Unicode NFC (Bengali composed forms) | any Bengali text | normalized before matching |
 | Bengali digits → ASCII | `৫০ rickshaw` | `50 rickshaw` |
 | Curated typo fixes (whole words) | `50 riksha 100 got payement` | `50 rickshaw 100 got payment` |
+| Spoken number words → digits (English, Banglish, Bengali script; compositional) | `রিকশা ভাড়া পঞ্চাশ টাকা` · `dui hajar taka` · `lunch two hundred fifty` | `… 50 টাকা` · `2000 taka` · `lunch 250` |
+| …but a lone small unit stays a word | `one coffee` | unchanged (never amount 1) |
 | k-shorthand | `salary 50k` / `coffee 3.5k` | `salary 50000` / `coffee 3500` |
+
+Voice note: bn-BD speech recognition outputs Bengali script and often writes
+amounts as words — both are first-class inputs. `টাকা` is detected and
+stripped as a currency word like `taka`/`tk`.
 
 The typo map (`TYPOS`) is for misspellings 2+ edits away or that collide with
 other vocabulary — `lanch` must become *lunch*, never the *launch* ferry.
@@ -65,8 +72,8 @@ parser detects the orientation of each group:
 | Literal `YYYY-MM-DD` | `rent 15500 2026-07-01` | 2026-07-01 |
 | `N days ago` / Banglish `N din age` | `coffee 60 2 days ago` | today − 2 (amount **60**) |
 | `day before yesterday` | `cha 20 day before yesterday` | today − 2 |
-| `yesterday` / `gotokal` / `gotkal` | `lunch 250 gotokal` | today − 1 |
-| `today` / `ajke` | `bus 40 ajke` | today |
+| `yesterday` / `gotokal` / `gotkal` / `গতকাল` | `lunch 250 gotokal` · `গতকাল লাঞ্চ ২৫০` | today − 1 |
+| `today` / `ajke` / `আজকে` | `bus 40 ajke` | today |
 | `last month` — a guess, so flagged | `rent 15000 last month` | same day last month, ⚠ |
 | Weekday = most recent occurrence (can be today) | `groceries 900 monday` | last Monday |
 | `last <weekday>` = strictly past | `tea 20 last friday` | never today |
@@ -87,9 +94,11 @@ Priority order (see PARSER_GUIDE.md for why):
 3. **Learned index** — this user's accepted history (see rule 10). Beats the
    built-in pack: if you've filed "burger" under Delivery twice, `burger 450`
    files under Delivery, not Fast Food.
-4. **Synonym pack** — ~250 spoken words in English, Banglish, and Bengali
-   script: `riksha 35` → Public Transit; `ডিম ১২০ দুধ ৯০` → two Groceries
-   entries; `daraz 3200` → Online Shopping.
+4. **Synonym pack** — ~300 spoken words in English, Banglish, and Bengali
+   script, including the transliterated loanwords bn-BD voice emits
+   (`লাঞ্চ`, `সিএনজি`, `ইন্টারনেট`, `রিচার্জ`): `riksha 35` → Public Transit;
+   `ডিম ১২০ দুধ ৯০` → two Groceries entries; `daraz 3200` → Online Shopping;
+   Bengali bill phrases (`কারেন্ট বিল`, `পানির বিল`) are curated overrides.
 5. **Typo tolerance** (rule 8).
 6. **Income fallback** — income wording with no category word: `got paid 20k`
    → Income, 20000.
@@ -114,6 +123,8 @@ income name never flips the transaction:
 | `received gift 500` | Income › Gift (intent unlocks it) |
 | `beton 20000 pelam` | Income › Salary, 20000 |
 | `salary dhukse 30k` | Income › Salary, 30000 |
+| `বেতন পেলাম ৩০০০০` | Income › Salary (পেলাম is the receipt verb) |
+| `স্কুলের বেতন ২০০০` | flagged ⚠ — বেতন also means school FEES, so bare বেতন is never intent |
 
 **Conflicting signals flag:** income wording around an expense-category word
 means the two readings disagree — ask the human. `sold old phone 3500` →
@@ -157,8 +168,10 @@ taka` → the $12 entry is ⚠, the 60 entry is clean.
 
 ## Scoreboard (2026-07-13)
 
-- 150-case extreme suite: v2 55/150 → **v3 150/150** (wave 2 was scored blind
-  at 68/100 before its fixes; every miss failed safe).
+- 195-case extreme suite: v2 55/150 on waves 1–2 → **v3 195/195**. Blind
+  first-contact scores before each wave's fixes: wave 2 (unseen typed input)
+  68/100; wave 3 (bn-BD voice transcripts) 4/45 — every miss in every blind
+  run failed safe as flagged ⚠, never silently wrong.
 - 51-line realistic corpus: 100% category accuracy (enforced floor: 85%).
 - Silent-wrong rate: **zero, enforced by test** (`tests/smoke.html`).
 - Live proof: open `tests/extreme-suite.html` — nothing on it is mocked.

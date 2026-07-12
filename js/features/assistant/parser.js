@@ -58,14 +58,17 @@ const TYPOS = {
 // Words that flag financial-meaning ambiguity (refund = income? negative
 // expense? credit-card payment isn't an expense at all; a loan is neither
 // income nor spending). Flags, never guesses.
-const REVIEW_WORDS = /\b(refund|transfer(?:red|ring)?|repay(?:ment)?|credit\s*card|borrow(?:ed)?|lent|loans?|dhar)\b/i;
+const REVIEW_WORDS = /\b(refund|transfer(?:red|ring)?|repay(?:ment)?|credit\s*card|borrow(?:ed)?|lent|loans?|dhar)\b|ধার/i;
 
 // Explicit income wording. Deliberately narrow: bare "paid" is spending
 // ("paid internet bill 1200"); only "got/was/were paid" is income. Includes
 // Banglish: beton (salary), pelam (received), dhukse/dhuklo (got credited).
 // "sold" counts as intent, but when the words around it match an expense
 // category ("sold old phone") parse() flags the conflict instead of guessing.
-const INCOME_INTENT = /\b(?:got|was|were)\s+(?:paid|payments?)\b|\b(?:salary|wages?|stipend|income|received|earn(?:ed|ing)?|freelanc(?:e|ing)|bonus|profit|sold|beton|pelam|dhuk(?:se|lo|eche))\b/i;
+// Bengali script uses RECEIPT verbs only (পেলাম got / পেয়েছি received /
+// ঢুকেছে credited) — bare "বেতন" is NOT intent, because "স্কুলের বেতন" is
+// school FEES going out. (No \b around Bengali: word-boundary is ASCII-only.)
+const INCOME_INTENT = /\b(?:got|was|were)\s+(?:paid|payments?)\b|\b(?:salary|wages?|stipend|income|received|earn(?:ed|ing)?|freelanc(?:e|ing)|bonus|profit|sold|beton|pelam|dhuk(?:se|lo|eche))\b|(?:পেলাম|পেয়েছি|ঢুক(?:েছে|ছে|লো)|ইনকাম|স্যালারি)/i;
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
@@ -106,6 +109,10 @@ const PHRASES = [
     [/\b(?:current|electric(?:ity)?|bidyut)\s+bill\b/i, 'Bills & Utilities', 'Electricity'],
     [/\b(?:water|wasa|pani)\s+bill\b/i, 'Bills & Utilities', 'Water'],
     [/\bpathao\s+food\b/i, 'Food & Dining', 'Delivery'],
+    // Bengali script (no \b — ASCII-only): bill phrases from bn-BD voice
+    [/(?:কারেন্ট|বিদ্যুৎ|ইলেকট্রিক)\s*বিল/, 'Bills & Utilities', 'Electricity'],
+    [/পানির?\s*বিল/, 'Bills & Utilities', 'Water'],
+    [/গ্যাস(?:ের)?\s*বিল/, 'Bills & Utilities', 'Other'],
     [/\b(?:dish|cable)\s+bill\b/i, 'Bills & Utilities', 'Other'],
     [/\b(?:mobile|phone)\s+(?:cover|case)\b/i, 'Shopping', 'Electronics'],
     [/\b(?:air|plane|flight)\s+ticket\b/i, 'Travel', 'Flights'],
@@ -126,32 +133,44 @@ const SYNONYMS = {
     // meals out
     breakfast: ['Food & Dining', 'Restaurants'],
     lunch: ['Food & Dining', 'Restaurants'],
+    'লাঞ্চ': ['Food & Dining', 'Restaurants'],
     dinner: ['Food & Dining', 'Restaurants'],
+    'ডিনার': ['Food & Dining', 'Restaurants'],
     restaurant: ['Food & Dining', 'Restaurants'],
     kacchi: ['Food & Dining', 'Restaurants'],
     biryani: ['Food & Dining', 'Restaurants'],
     biriyani: ['Food & Dining', 'Restaurants'],
+    'বিরিয়ানি': ['Food & Dining', 'Restaurants'],
     khichuri: ['Food & Dining', 'Restaurants'],
     kebab: ['Food & Dining', 'Restaurants'],
     iftar: ['Food & Dining', null],
     market: ['Food & Dining', null],
     nasta: ['Food & Dining', 'Coffee & Snacks'],
+    'নাস্তা': ['Food & Dining', 'Coffee & Snacks'],
     pani: ['Food & Dining', null],
+    'পানি': ['Food & Dining', null],
     'খাবার': ['Food & Dining', null],
     'ভাত': ['Food & Dining', null],
     // street food / fast food
     burger: ['Food & Dining', 'Fast Food'],
+    'বার্গার': ['Food & Dining', 'Fast Food'],
     pizza: ['Food & Dining', 'Fast Food'],
+    'পিজা': ['Food & Dining', 'Fast Food'],
+    'পিৎজা': ['Food & Dining', 'Fast Food'],
     pasta: ['Food & Dining', 'Fast Food'],
     shawarma: ['Food & Dining', 'Fast Food'],
     fuchka: ['Food & Dining', 'Fast Food'],
+    'ফুচকা': ['Food & Dining', 'Fast Food'],
     chotpoti: ['Food & Dining', 'Fast Food'],
     jhalmuri: ['Food & Dining', 'Fast Food'],
+    'ঝালমুড়ি': ['Food & Dining', 'Fast Food'],
     singara: ['Food & Dining', 'Fast Food'],
+    'সিঙ্গারা': ['Food & Dining', 'Fast Food'],
     samosa: ['Food & Dining', 'Fast Food'],
     // snacks & drinks
     tea: ['Food & Dining', 'Coffee & Snacks'],
     coffee: ['Food & Dining', 'Coffee & Snacks'],
+    'কফি': ['Food & Dining', 'Coffee & Snacks'],
     cha: ['Food & Dining', 'Coffee & Snacks'],
     chai: ['Food & Dining', 'Coffee & Snacks'],
     'চা': ['Food & Dining', 'Coffee & Snacks'],
@@ -165,6 +184,7 @@ const SYNONYMS = {
     popcorn: ['Food & Dining', 'Coffee & Snacks'],
     icecream: ['Food & Dining', 'Coffee & Snacks'],
     mishti: ['Food & Dining', 'Coffee & Snacks'],
+    'মিষ্টি': ['Food & Dining', 'Coffee & Snacks'],
     sweet: ['Food & Dining', 'Coffee & Snacks'],
     dessert: ['Food & Dining', 'Coffee & Snacks'],
     // groceries
@@ -177,11 +197,15 @@ const SYNONYMS = {
     'মাছ': ['Food & Dining', 'Groceries'],
     vegetable: ['Food & Dining', 'Groceries'],
     shobji: ['Food & Dining', 'Groceries'],
+    'সবজি': ['Food & Dining', 'Groceries'],
     meat: ['Food & Dining', 'Groceries'],
     mangsho: ['Food & Dining', 'Groceries'],
+    'মাংস': ['Food & Dining', 'Groceries'],
     rice: ['Food & Dining', 'Groceries'],
     chal: ['Food & Dining', 'Groceries'],
+    'চাল': ['Food & Dining', 'Groceries'],
     dal: ['Food & Dining', 'Groceries'],
+    'ডাল': ['Food & Dining', 'Groceries'],
     lentil: ['Food & Dining', 'Groceries'],
     egg: ['Food & Dining', 'Groceries'],
     dim: ['Food & Dining', 'Groceries'],
@@ -191,27 +215,38 @@ const SYNONYMS = {
     'দুধ': ['Food & Dining', 'Groceries'],
     bread: ['Food & Dining', 'Groceries'],
     pauruti: ['Food & Dining', 'Groceries'],
+    'পাউরুটি': ['Food & Dining', 'Groceries'],
+    'রুটি': ['Food & Dining', 'Groceries'],
     fruit: ['Food & Dining', 'Groceries'],
     banana: ['Food & Dining', 'Groceries'],
+    'কলা': ['Food & Dining', 'Groceries'],
+    'ফল': ['Food & Dining', 'Groceries'],
     mango: ['Food & Dining', 'Groceries'],
     potato: ['Food & Dining', 'Groceries'],
     alu: ['Food & Dining', 'Groceries'],
+    'আলু': ['Food & Dining', 'Groceries'],
     onion: ['Food & Dining', 'Groceries'],
+    'পেঁয়াজ': ['Food & Dining', 'Groceries'],
     garlic: ['Food & Dining', 'Groceries'],
     ginger: ['Food & Dining', 'Groceries'],
     oil: ['Food & Dining', 'Groceries'],
     tel: ['Food & Dining', 'Groceries'],
+    'তেল': ['Food & Dining', 'Groceries'],
     sugar: ['Food & Dining', 'Groceries'],
     chini: ['Food & Dining', 'Groceries'],
+    'চিনি': ['Food & Dining', 'Groceries'],
     salt: ['Food & Dining', 'Groceries'],
     flour: ['Food & Dining', 'Groceries'],
     atta: ['Food & Dining', 'Groceries'],
+    'আটা': ['Food & Dining', 'Groceries'],
     masala: ['Food & Dining', 'Groceries'],
     spice: ['Food & Dining', 'Groceries'],
     chicken: ['Food & Dining', 'Groceries'],
     murgi: ['Food & Dining', 'Groceries'],
+    'মুরগি': ['Food & Dining', 'Groceries'],
     beef: ['Food & Dining', 'Groceries'],
     goru: ['Food & Dining', 'Groceries'],
+    'গরু': ['Food & Dining', 'Groceries'],
     mutton: ['Food & Dining', 'Groceries'],
     prawn: ['Food & Dining', 'Groceries'],
     shrimp: ['Food & Dining', 'Groceries'],
@@ -225,32 +260,46 @@ const SYNONYMS = {
     bus: ['Transportation', 'Public Transit'],
     'বাস': ['Transportation', 'Public Transit'],
     train: ['Transportation', 'Public Transit'],
+    'ট্রেন': ['Transportation', 'Public Transit'],
     metro: ['Transportation', 'Public Transit'],
+    'মেট্রো': ['Transportation', 'Public Transit'],
     launch: ['Transportation', 'Public Transit'],
+    'লঞ্চ': ['Transportation', 'Public Transit'],
     boat: ['Transportation', 'Public Transit'],
     ferry: ['Transportation', 'Public Transit'],
     tempo: ['Transportation', 'Public Transit'],
     leguna: ['Transportation', 'Public Transit'],
     taxi: ['Transportation', 'Uber/Lyft'],
     uber: ['Transportation', 'Uber/Lyft'],
+    'উবার': ['Transportation', 'Uber/Lyft'],
     cng: ['Transportation', 'Uber/Lyft'],
+    'সিএনজি': ['Transportation', 'Uber/Lyft'],
     pathao: ['Transportation', 'Uber/Lyft'],
+    'পাঠাও': ['Transportation', 'Uber/Lyft'],
     ola: ['Transportation', 'Uber/Lyft'],
     fuel: ['Transportation', 'Fuel/Gas'],
     petrol: ['Transportation', 'Fuel/Gas'],
+    'পেট্রোল': ['Transportation', 'Fuel/Gas'],
     diesel: ['Transportation', 'Fuel/Gas'],
+    'ডিজেল': ['Transportation', 'Fuel/Gas'],
     octane: ['Transportation', 'Fuel/Gas'],
+    'অকটেন': ['Transportation', 'Fuel/Gas'],
     servicing: ['Transportation', 'Car Maintenance'],
     bike: ['Transportation', null],
     motorcycle: ['Transportation', null],
     toll: ['Transportation', null],
     gari: ['Transportation', null],
+    'গাড়ি': ['Transportation', null],
     // bills & utilities
     rent: ['Bills & Utilities', 'Rent/Mortgage'],
     internet: ['Bills & Utilities', 'Internet'],
+    'ইন্টারনেট': ['Bills & Utilities', 'Internet'],
     wifi: ['Bills & Utilities', 'Internet'],
+    'ওয়াইফাই': ['Bills & Utilities', 'Internet'],
     broadband: ['Bills & Utilities', 'Internet'],
     electricity: ['Bills & Utilities', 'Electricity'],
+    'বিদ্যুৎ': ['Bills & Utilities', 'Electricity'],
+    'কারেন্ট': ['Bills & Utilities', 'Electricity'],
     electric: ['Bills & Utilities', 'Electricity'],
     desco: ['Bills & Utilities', 'Electricity'],
     bidyut: ['Bills & Utilities', 'Electricity'],
@@ -258,8 +307,12 @@ const SYNONYMS = {
     wasa: ['Bills & Utilities', 'Water'],
     phone: ['Bills & Utilities', 'Phone'],
     mobile: ['Bills & Utilities', 'Phone'],
+    'মোবাইল': ['Bills & Utilities', 'Phone'],
+    'ফোন': ['Bills & Utilities', 'Phone'],
     recharge: ['Bills & Utilities', 'Phone'],
+    'রিচার্জ': ['Bills & Utilities', 'Phone'],
     titas: ['Bills & Utilities', null],
+    'বিল': ['Bills & Utilities', null],
     // healthcare
     medicine: ['Healthcare', 'Medicine'],
     meds: ['Healthcare', 'Medicine'],
@@ -269,6 +322,7 @@ const SYNONYMS = {
     'ওষুধ': ['Healthcare', 'Medicine'],
     'ঔষধ': ['Healthcare', 'Medicine'],
     napa: ['Healthcare', 'Medicine'],
+    'নাপা': ['Healthcare', 'Medicine'],
     paracetamol: ['Healthcare', 'Medicine'],
     antibiotic: ['Healthcare', 'Medicine'],
     tablet: ['Healthcare', 'Medicine'],
@@ -278,15 +332,21 @@ const SYNONYMS = {
     'ডাক্তার': ['Healthcare', 'Doctor Visit'],
     checkup: ['Healthcare', 'Doctor Visit'],
     pharmacy: ['Healthcare', 'Pharmacy'],
+    'ফার্মেসি': ['Healthcare', 'Pharmacy'],
     gym: ['Healthcare', 'Gym/Fitness'],
     dentist: ['Healthcare', 'Dental'],
     hospital: ['Healthcare', null],
+    'হাসপাতাল': ['Healthcare', null],
     clinic: ['Healthcare', null],
+    'ক্লিনিক': ['Healthcare', null],
     // entertainment
     movie: ['Entertainment', 'Movies'],
+    'মুভি': ['Entertainment', 'Movies'],
     cinema: ['Entertainment', 'Movies'],
+    'সিনেমা': ['Entertainment', 'Movies'],
     game: ['Entertainment', 'Games'],
     netflix: ['Entertainment', 'Streaming Services'],
+    'নেটফ্লিক্স': ['Entertainment', 'Streaming Services'],
     spotify: ['Entertainment', 'Streaming Services'],
     hoichoi: ['Entertainment', 'Streaming Services'],
     chorki: ['Entertainment', 'Streaming Services'],
@@ -295,11 +355,16 @@ const SYNONYMS = {
     football: ['Entertainment', 'Sports'],
     // shopping
     shirt: ['Shopping', 'Clothes'],
+    'জামা': ['Shopping', 'Clothes'],
+    'শার্ট': ['Shopping', 'Clothes'],
+    'প্যান্ট': ['Shopping', 'Clothes'],
     shoe: ['Shopping', 'Clothes'],
     'জুতা': ['Shopping', 'Clothes'],
     dress: ['Shopping', 'Clothes'],
     panjabi: ['Shopping', 'Clothes'],
+    'পাঞ্জাবি': ['Shopping', 'Clothes'],
     saree: ['Shopping', 'Clothes'],
+    'শাড়ি': ['Shopping', 'Clothes'],
     sari: ['Shopping', 'Clothes'],
     lungi: ['Shopping', 'Clothes'],
     pant: ['Shopping', 'Clothes'],
@@ -329,21 +394,27 @@ const SYNONYMS = {
     'কলম': ['Education', 'Supplies'],
     pencil: ['Education', 'Supplies'],
     tuition: ['Education', 'Tuition'],
+    'টিউশন': ['Education', 'Tuition'],
     udemy: ['Education', 'Courses'],
     coursera: ['Education', 'Courses'],
     school: ['Education', null],
+    'স্কুল': ['Education', null],
     college: ['Education', null],
+    'কলেজ': ['Education', null],
     university: ['Education', null],
     exam: ['Education', null],
     // personal care
     haircut: ['Personal Care', 'Haircut'],
     salon: ['Personal Care', 'Haircut'],
+    'সেলুন': ['Personal Care', 'Haircut'],
     barber: ['Personal Care', 'Haircut'],
     facial: ['Personal Care', 'Spa/Massage'],
     lipstick: ['Personal Care', 'Cosmetics'],
     shampoo: ['Personal Care', null],
+    'শ্যাম্পু': ['Personal Care', null],
     soap: ['Personal Care', null],
     sabun: ['Personal Care', null],
+    'সাবান': ['Personal Care', null],
     shaving: ['Personal Care', null],
     shave: ['Personal Care', null],
     toothpaste: ['Personal Care', null],
@@ -368,7 +439,9 @@ const SYNONYMS = {
     bonus: ['Income', 'Salary'],
     wage: ['Income', 'Salary'],
     stipend: ['Income', 'Salary'],
-    beton: ['Income', 'Salary']
+    beton: ['Income', 'Salary'],
+    'বেতন': ['Income', 'Salary'],
+    'বোনাস': ['Income', 'Salary']
 };
 
 /** Synonym map keyed by folded word, built once. */
@@ -477,12 +550,92 @@ export function parse(text, ctx = {}) {
     return { entries, unmatched };
 }
 
-/** Bengali digits → ASCII; curated typo fixes; "50k" → "50000". */
+/** NFC; Bengali digits → ASCII; curated typo fixes; spoken number words →
+ *  digits ("পঞ্চাশ টাকা" → "50 টাকা", "dui hajar" → "2000"); "50k" → "50000". */
 export function normalize(text) {
-    let t = text.replace(/[০-৯]/g, ch => BN_DIGITS[ch] || ch);
+    let t = String(text).normalize('NFC');
+    t = t.replace(/[০-৯]/g, ch => BN_DIGITS[ch] || ch);
     t = t.replace(/[A-Za-z]+/g, w => TYPOS[w.toLowerCase()] || w);
+    t = wordsToNumber(t);
     t = t.replace(/\b(\d+(?:\.\d+)?)\s*k\b/gi, (_, n) => String(Math.round(parseFloat(n) * 1000)));
     return t;
+}
+
+// Spoken amounts, three vocabularies: English, Latin Banglish, Bengali script.
+// bn-BD voice writes "পঞ্চাশ টাকা", not "৫০". Additive values; Latin "at" (8)
+// is deliberately absent — it's an English word ("at 3" is a time).
+const NUM_UNITS = {
+    one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
+    nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14,
+    fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+    twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70,
+    eighty: 80, ninety: 90,
+    ek: 1, dui: 2, tin: 3, char: 4, pach: 5, panch: 5, choy: 6, chhoy: 6,
+    sat: 7, noy: 9, dosh: 10, bish: 20, kuri: 20, trish: 30, chollish: 40,
+    ponchash: 50, shat: 60, shait: 60, shottor: 70, ashi: 80, nobboi: 90,
+    'এক': 1, 'দুই': 2, 'তিন': 3, 'চার': 4, 'পাঁচ': 5, 'ছয়': 6, 'সাত': 7,
+    'আট': 8, 'নয়': 9, 'দশ': 10, 'বিশ': 20, 'কুড়ি': 20, 'ত্রিশ': 30,
+    'চল্লিশ': 40, 'পঞ্চাশ': 50, 'ষাট': 60, 'সত্তর': 70, 'আশি': 80, 'নব্বই': 90,
+    // hundred-compounds written as one token
+    eksho: 100, duisho: 200, tinsho: 300, charsho: 400, pachsho: 500,
+    panchsho: 500, choysho: 600, chhoysho: 600, satsho: 700, atsho: 800, noysho: 900,
+    'একশ': 100, 'একশো': 100, 'দুইশ': 200, 'দুইশো': 200, 'তিনশ': 300, 'তিনশো': 300,
+    'চারশ': 400, 'চারশো': 400, 'পাঁচশ': 500, 'পাঁচশো': 500, 'ছয়শ': 600, 'ছয়শো': 600,
+    'সাতশ': 700, 'সাতশো': 700, 'আটশ': 800, 'আটশো': 800, 'নয়শ': 900, 'নয়শো': 900
+};
+const NUM_MULTS = {
+    hundred: 100, sho: 100, shoto: 100, 'শ': 100, 'শো': 100, 'শত': 100,
+    thousand: 1000, hajar: 1000, hazar: 1000, 'হাজার': 1000,
+    lakh: 100000, lac: 100000, 'লাখ': 100000, 'লক্ষ': 100000
+};
+const NUM_U = new Map(Object.entries(NUM_UNITS).map(([k, v]) => [k.normalize('NFC'), v]));
+const NUM_M = new Map(Object.entries(NUM_MULTS).map(([k, v]) => [k.normalize('NFC'), v]));
+
+/**
+ * Replace maximal runs of spoken-number words with digits. A lone small unit
+ * stays a word ("one coffee" is not amount 1) — a run converts only when it
+ * has 2+ words or reaches 10 ("fifty", "পাঁচশো", "dui hajar").
+ */
+function wordsToNumber(text) {
+    const parts = text.split(/(\s+)/);
+    const out = [];
+    let runOrig = '', cur = 0, total = 0, count = 0, tail = '', pendingSep = '';
+
+    const flush = () => {
+        if (count) {
+            const value = total + cur;
+            out.push((count > 1 || value >= 10) ? String(value) + tail : runOrig);
+        }
+        runOrig = ''; cur = 0; total = 0; count = 0; tail = '';
+    };
+
+    for (const part of parts) {
+        if (!part) continue;
+        if (/^\s+$/.test(part)) {
+            if (count) pendingSep += part;
+            else out.push(part);
+            continue;
+        }
+        const m = /^(.*?)([.,;:!?]*)$/.exec(part);
+        const core = m[1].normalize('NFC').toLowerCase();
+        const u = NUM_U.get(core), mult = NUM_M.get(core);
+        if (u != null || mult != null) {
+            runOrig += pendingSep + part;
+            pendingSep = '';
+            if (u != null) cur += u;
+            else if (mult >= 1000) { total += (cur || 1) * mult; cur = 0; }
+            else cur = (cur || 1) * mult;
+            count++;
+            if (m[2]) { tail = m[2]; flush(); }
+            continue;
+        }
+        flush();
+        if (pendingSep) { out.push(pendingSep); pendingSep = ''; }
+        out.push(part);
+    }
+    flush();
+    if (pendingSep) out.push(pendingSep);
+    return out.join('');
 }
 
 /**
@@ -605,11 +758,11 @@ export function extractDate(seg, todayStr) {
     if (/\bday\s+before\s+yesterday\b/i.test(seg)) {
         return { date: dateFromToday(todayStr, 2), cleaned: seg.replace(/\bday\s+before\s+yesterday\b/gi, ' ') };
     }
-    if (/\btoday\b|\bajke\b/i.test(seg)) {
-        return { date: todayStr, cleaned: seg.replace(/\btoday\b|\bajke\b/gi, ' ') };
+    if (/\btoday\b|\bajke\b|আজকে/i.test(seg)) {
+        return { date: todayStr, cleaned: seg.replace(/\btoday\b|\bajke\b|আজকে/gi, ' ') };
     }
-    if (/\byesterday\b|\bgot(?:o)?kal\b/i.test(seg)) {
-        return { date: dateFromToday(todayStr, 1), cleaned: seg.replace(/\byesterday\b|\bgot(?:o)?kal\b/gi, ' ') };
+    if (/\byesterday\b|\bgot(?:o)?kal\b|গতকাল/i.test(seg)) {
+        return { date: dateFromToday(todayStr, 1), cleaned: seg.replace(/\byesterday\b|\bgot(?:o)?kal\b|গতকাল/gi, ' ') };
     }
     if (/\blast\s+month\b/i.test(seg)) {
         return { date: prevMonthDate(todayStr), cleaned: seg.replace(/\blast\s+month\b/gi, ' '), approx: true };
@@ -657,6 +810,7 @@ export function extractAmount(seg) {
 function detectCurrency(seg) {
     const sym = seg.match(/[৳$£€₹¥]/);
     if (sym) return CURRENCY_SYMBOLS[sym[0]];
+    if (/টাকা/.test(seg)) return 'BDT'; // bn-BD voice writes the word out
     CURRENCY_WORD_RE.lastIndex = 0;
     const word = CURRENCY_WORD_RE.exec(seg);
     if (word) return CURRENCY_WORDS[word[1].toLowerCase()];
@@ -664,12 +818,13 @@ function detectCurrency(seg) {
 }
 
 function stripCurrencyTokens(s) {
-    return s.replace(/[৳$£€₹¥-]/g, ' ').replace(CURRENCY_WORD_RE, ' ');
+    return s.replace(/[৳$£€₹¥-]/g, ' ').replace(/টাকা/g, ' ').replace(CURRENCY_WORD_RE, ' ');
 }
 
-/** Case-fold + naive singular fold so "concert"/"Concerts" meet in the middle. */
+/** NFC + case-fold + naive singular fold so "concert"/"Concerts" meet in the
+ *  middle — and Bengali composed/decomposed forms ("য়" both ways) match. */
 export function fold(w) {
-    w = w.toLowerCase();
+    w = w.normalize('NFC').toLowerCase();
     if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0, -1);
     return w;
 }
