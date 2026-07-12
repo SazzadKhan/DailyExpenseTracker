@@ -161,3 +161,63 @@
 }
 .cap-suggest-btn:hover { border-color: var(--border-light); }
 .cap-suggest-no { color: var(--text-muted); }
+
+/* ---- voice input (see js/features/capture/voice.js) ----------------------
+   The in-app mic is the ONLINE option (Web Speech, opt-in); the tip points
+   at the on-device keyboard mic. */
+
+.cap-voice-mic,
+.cap-voice-lang {
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    padding: 7px 10px;
+    font: inherit;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.cap-voice-mic:hover,
+.cap-voice-lang:hover { border-color: var(--primary); }
+
+.cap-voice-lang {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.cap-mic-live {
+    border-color: var(--primary);
+    animation: cap-mic-pulse 1.2s ease-in-out infinite;
+}
+@keyframes cap-mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.45); }
+    50%      { box-shadow: 0 0 0 6px rgba(220, 53, 69, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cap-mic-live { animation: none; }
+}
+
+.cap-voice-tip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    border: 1px dashed var(--border-light);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 0.85em;
+}
+.cap-voice-tip span { flex: 1; }
+.cap-voice-tip-close {
+    flex-shrink: 0;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font: inherit;
+    padding: 2px 6px;
+}
+.cap-voice-tip-close:hover { color: var(--text-primary); }

@@ -20,6 +20,7 @@ import { isIncomeCategory } from '../categories/categories.model.js';
 import { parse } from '../assistant/parser.js';
 import { logInteraction, markOutcome, exportLog } from '../assistant/audit-log.js';
 import { getLearnedLookup, recordOutcome, nextSuggestion, acceptSuggestion, dismissSuggestion } from '../assistant/learned.js';
+import { mountVoice } from './voice.js';
 
 let inputEl, submitEl, receiptEl;
 
@@ -39,6 +40,8 @@ export function mount() {
         a.click();
         URL.revokeObjectURL(a.href);
     };
+
+    mountVoice(inputEl);
 
     on(submitEl, 'click', handleSubmit);
     // Enter submits; Shift+Enter is a newline (the box is a textarea).
