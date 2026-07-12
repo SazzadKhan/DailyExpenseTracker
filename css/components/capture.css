@@ -166,37 +166,78 @@
    The in-app mic is the ONLINE option (Web Speech, opt-in); the tip points
    at the on-device keyboard mic. */
 
-.cap-voice-mic,
 .cap-voice-lang {
     flex-shrink: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--bg-card);
-    color: var(--text-primary);
+    color: var(--text-secondary);
     padding: 7px 10px;
     font: inherit;
+    font-size: 0.85em;
+    font-weight: 600;
     cursor: pointer;
     transition: var(--transition);
 }
-.cap-voice-mic:hover,
 .cap-voice-lang:hover { border-color: var(--primary); }
 
-.cap-voice-lang {
-    font-size: 0.85em;
-    font-weight: 600;
-    color: var(--text-secondary);
+/* Hold-to-talk mic. While listening, the ring and glow are driven by
+   --mic-level (0..1), set every frame from the REAL microphone signal —
+   the movement is the confirmation that sound is being detected. */
+.cap-voice-mic {
+    --mic-level: 0;
+    position: relative;
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--bg-card);
+    font-size: 1.1em;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.06s linear;
+    touch-action: none;               /* the hold gesture owns the pointer */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;      /* no long-press menu on iOS */
+    -webkit-tap-highlight-color: transparent;
+}
+.cap-voice-mic:hover { border-color: var(--primary); transform: scale(1.06); }
+.cap-voice-mic:active { transform: scale(0.96); }
+
+.cap-voice-mic.cap-mic-live {
+    border-color: transparent;
+    background: linear-gradient(135deg, var(--primary), #e5484d);
+    transform: scale(calc(1.02 + var(--mic-level) * 0.14));
+    box-shadow: 0 0 calc(6px + var(--mic-level) * 22px)
+                rgba(229, 72, 77, calc(0.35 + var(--mic-level) * 0.45));
 }
 
-.cap-mic-live {
-    border-color: var(--primary);
-    animation: cap-mic-pulse 1.2s ease-in-out infinite;
+/* voice-level ring: expands with the sound level */
+.cap-voice-mic::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid var(--primary);
+    opacity: 0;
+    pointer-events: none;
 }
-@keyframes cap-mic-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.45); }
-    50%      { box-shadow: 0 0 0 6px rgba(220, 53, 69, 0); }
+.cap-voice-mic.cap-mic-live::after {
+    opacity: calc(0.75 - var(--mic-level) * 0.35);
+    transform: scale(calc(1 + var(--mic-level) * 0.55));
+    transition: transform 0.06s linear;
+}
+
+/* idle breathing while live-but-silent, so "listening" never looks frozen */
+.cap-voice-mic.cap-mic-live { animation: cap-mic-breathe 1.6s ease-in-out infinite; }
+@keyframes cap-mic-breathe {
+    0%, 100% { filter: brightness(1); }
+    50%      { filter: brightness(1.18); }
 }
 @media (prefers-reduced-motion: reduce) {
-    .cap-mic-live { animation: none; }
+    .cap-voice-mic.cap-mic-live { animation: none; }
 }
 
 .cap-voice-tip {

@@ -25,13 +25,17 @@ const LANGS = [
     { code: 'bn-BD', chip: 'বাং', label: 'Bangla' }
 ];
 
-let inputEl, micBtn, langBtn, recognition = null;
-let baseText = ''; // input content at the moment recording started
+let inputEl, micBtn, langBtn, hintEl, recognition = null;
+let baseText = '';      // input content at the moment recording started
+let holding = false;    // pointer/key currently down on the mic
+let asking = false;     // consent dialog open
+let hintText = '';      // original hint, restored after listening
 
 export function mountVoice(captureInput) {
     inputEl = captureInput;
     const actions = $('#capture-box .capture-actions');
     if (!inputEl || !actions) return;
+    hintEl = $('.capture-hint', actions);
 
     const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (Rec) {
@@ -41,26 +45,46 @@ export function mountVoice(captureInput) {
         }, currentLang().chip);
         micBtn = el('button', {
             type: 'button', class: 'cap-voice-mic', id: 'capture-voice-mic',
-            title: 'Voice input (online — browser speech service)',
-            'aria-label': 'Voice input, online', 'aria-pressed': 'false'
+            title: 'Hold to talk (online voice)',
+            'aria-label': 'Hold to talk, online voice', 'aria-pressed': 'false'
         }, '🎤');
         const submit = $('#capture-submit');
         actions.insertBefore(langBtn, submit);
         actions.insertBefore(micBtn, submit);
 
-        on(micBtn, 'click', toggleRecording);
+        // Walkie-talkie: listen only while held. Pointer events cover mouse
+        // and touch; capture keeps the release working outside the button.
+        on(micBtn, 'pointerdown', onHoldStart);
+        on(micBtn, 'pointerup', onHoldEnd);
+        on(micBtn, 'pointercancel', onHoldEnd);
+        on(micBtn, 'contextmenu', ev => ev.preventDefault()); // long-press menu
+        // Keyboard: hold Space/Enter to talk.
+        on(micBtn, 'keydown', ev => {
+            const e = /** @type {KeyboardEvent} */ (ev);
+            if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); onHoldStart(e); }
+        });
+        on(micBtn, 'keyup', ev => {
+            const e = /** @type {KeyboardEvent} */ (ev);
+            if (e.key === ' ' || e.key === 'Enter') onHoldEnd(e);
+        });
+
         on(langBtn, 'click', cycleLang);
     }
 
     mountKeyboardTip();
 }
 
-// ---- option 1: in-app mic (Web Speech, online) ------------------------------
+// ---- option 1: in-app mic (Web Speech, online), hold-to-talk ----------------
 
-async function toggleRecording() {
-    if (recognition) { stopRecording(); return; }
+async function onHoldStart(ev) {
+    if (ev.pointerId != null && micBtn.setPointerCapture) {
+        try { micBtn.setPointerCapture(ev.pointerId); } catch { /* fine */ }
+    }
+    if (holding || recognition || asking) return;
+    holding = true;
 
     if (localStorage.getItem(STORAGE_KEYS.VOICE_CONSENT) !== 'yes') {
+        asking = true;
         const ok = await dialogConfirm({
             title: 'Online voice',
             message: 'The in-app mic uses your browser’s speech service — audio is sent to ' +
@@ -68,10 +92,24 @@ async function toggleRecording() {
                 'For voice that never leaves your phone, use the 🎤 on your keyboard instead.\n\nUse online voice?',
             confirmText: 'Use online voice'
         });
-        if (!ok) return;
-        localStorage.setItem(STORAGE_KEYS.VOICE_CONSENT, 'yes');
+        asking = false;
+        holding = false; // finger is long gone — next hold actually listens
+        if (ok) localStorage.setItem(STORAGE_KEYS.VOICE_CONSENT, 'yes');
+        return;
     }
     startEngine();
+}
+
+function onHoldEnd() {
+    holding = false;
+    if (recognition) {
+        // Keep the handlers attached: between stop() and onend the engine
+        // flushes its FINAL (most accurate) transcript — dropping handlers
+        // here would keep only the rougher interim text.
+        try { recognition.stop(); } catch { /* already stopped */ }
+    }
+    stopMeter();
+    setLive(false);
 }
 
 /** The engine seam: swap this for a local (Whisper/WASM) engine later. */
@@ -79,11 +117,12 @@ function startEngine() {
     const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new Rec();
     recognition.lang = currentLang().code;
-    recognition.continuous = false;      // tap-to-talk utterances, not dictation
+    recognition.continuous = true;       // keep listening for the whole hold
     recognition.interimResults = true;   // live text while speaking
 
     baseText = inputEl.value.trim();
     setLive(true);
+    startMeter(); // sound-level ring — visual proof it hears you
 
     recognition.onresult = (ev) => {
         let transcript = '';
@@ -103,6 +142,8 @@ function startEngine() {
         } // 'no-speech' / 'aborted': stop quietly
     };
     recognition.onend = () => {
+        // Fires after release (final transcript flushed) or on its own after
+        // silence mid-hold — either way, tear down and hand back the input.
         stopRecording();
         inputEl.focus(); // review, then Log it — never auto-submit
     };
@@ -117,6 +158,7 @@ function stopRecording() {
         try { recognition.stop(); } catch { /* already stopped */ }
         recognition = null;
     }
+    stopMeter();
     setLive(false);
 }
 
@@ -124,7 +166,59 @@ function setLive(live) {
     if (!micBtn) return;
     micBtn.classList.toggle('cap-mic-live', live);
     micBtn.setAttribute('aria-pressed', String(live));
-    micBtn.title = live ? 'Stop listening' : 'Voice input (online — browser speech service)';
+    micBtn.title = live ? 'Listening — release to stop' : 'Hold to talk (online voice)';
+    if (hintEl) {
+        if (live) { hintText = hintEl.textContent; hintEl.textContent = '🔴 Listening — release to stop'; }
+        else if (hintText) { hintEl.textContent = hintText; hintText = ''; }
+    }
+}
+
+// ---- sound-level meter -------------------------------------------------------
+// Web Speech reports no audio levels, so a parallel WebAudio analyser reads the
+// mic (same permission grant) and drives the button's --mic-level custom
+// property: the ring you see moving IS your voice being detected.
+
+let meter = null; // { stream, ctx, raf }
+
+async function startMeter() {
+    if (meter || !navigator.mediaDevices?.getUserMedia) return;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new Ctx();
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const buf = new Uint8Array(analyser.fftSize);
+        meter = { stream, ctx, raf: 0 };
+
+        let smooth = 0;
+        const tick = () => {
+            if (!meter) return;
+            analyser.getByteTimeDomainData(buf);
+            let sum = 0;
+            for (let i = 0; i < buf.length; i++) {
+                const d = (buf[i] - 128) / 128;
+                sum += d * d;
+            }
+            // RMS → 0..1 with a fast attack and slow release, so the ring
+            // jumps when you speak and settles when you pause.
+            const level = Math.min(1, Math.sqrt(sum / buf.length) * 4);
+            smooth = level > smooth ? level : smooth * 0.85;
+            micBtn.style.setProperty('--mic-level', smooth.toFixed(3));
+            meter.raf = requestAnimationFrame(tick);
+        };
+        meter.raf = requestAnimationFrame(tick);
+    } catch { /* meter is decoration — recognition still works without it */ }
+}
+
+function stopMeter() {
+    if (!meter) return;
+    cancelAnimationFrame(meter.raf);
+    for (const t of meter.stream.getTracks()) t.stop();
+    meter.ctx.close().catch(() => {});
+    meter = null;
+    micBtn.style.setProperty('--mic-level', '0');
 }
 
 // ---- language toggle ---------------------------------------------------------
