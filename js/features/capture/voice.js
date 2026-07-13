@@ -22,7 +22,10 @@ import { confirm as dialogConfirm, alert as dialogAlert } from '../../services/d
 
 const LANGS = [
     { code: 'en-US', chip: 'EN', label: 'English' },
-    { code: 'bn-BD', chip: 'বাং', label: 'Bangla' }
+    { code: 'bn-BD', chip: 'বাং', label: 'Bangla (BD)' },
+    // Google's Indian Bengali model — often noticeably more accurate than
+    // bn-BD; same script output, so the parser treats both identically.
+    { code: 'bn-IN', chip: 'বাং·IN', label: 'Bangla (IN model)' }
 ];
 
 let inputEl, micBtn, langBtn, hintEl, recognition = null;
@@ -108,7 +111,7 @@ function onHoldEnd() {
         // here would keep only the rougher interim text.
         try { recognition.stop(); } catch { /* already stopped */ }
     }
-    stopMeter();
+    stopPulse();
     setLive(false);
 }
 
@@ -119,15 +122,30 @@ function startEngine() {
     recognition.lang = currentLang().code;
     recognition.continuous = true;       // keep listening for the whole hold
     recognition.interimResults = true;   // live text while speaking
+    recognition.maxAlternatives = 1;
 
     baseText = inputEl.value.trim();
     setLive(true);
-    startMeter(); // sound-level ring — visual proof it hears you
+    setHint('⏳ Connecting…'); // start() needs ~½s — speaking now gets lost
+    startPulse();
+
+    // The recognizer's OWN events drive the animation — no second mic
+    // capture (a parallel getUserMedia degrades recognition on many
+    // devices), and a pulse here means the engine really registered sound.
+    recognition.onaudiostart = () => { setHint('🔴 Listening — speak now'); bumpLevel(0.35); };
+    recognition.onsoundstart = () => bumpLevel(0.6);
+    recognition.onspeechstart = () => bumpLevel(0.9);
 
     recognition.onresult = (ev) => {
-        let transcript = '';
-        for (const r of ev.results) transcript += r[0].transcript;
-        transcript = transcript.trim();
+        bumpLevel(0.55 + Math.random() * 0.4);
+        // Finals first, then the freshest interim — never mix stale interims.
+        let final = '', interim = '';
+        for (let i = 0; i < ev.results.length; i++) {
+            const r = ev.results[i];
+            if (r.isFinal) final += r[0].transcript + ' ';
+            else interim += r[0].transcript + ' ';
+        }
+        const transcript = (final + interim).replace(/\s+/g, ' ').trim();
         if (transcript) {
             inputEl.value = baseText ? `${baseText} ${transcript}` : transcript;
         }
@@ -139,6 +157,8 @@ function startEngine() {
             dialogAlert('Microphone is blocked. Allow mic access for this site in your browser settings, or use the 🎤 on your keyboard.');
         } else if (err === 'network') {
             dialogAlert('Online voice needs a connection. Offline? The 🎤 on your keyboard may still work on-device.');
+        } else if (err === 'audio-capture') {
+            dialogAlert('No microphone found, or another app is using it.');
         } // 'no-speech' / 'aborted': stop quietly
     };
     recognition.onend = () => {
@@ -155,10 +175,11 @@ function startEngine() {
 function stopRecording() {
     if (recognition) {
         recognition.onresult = recognition.onerror = recognition.onend = null;
+        recognition.onaudiostart = recognition.onsoundstart = recognition.onspeechstart = null;
         try { recognition.stop(); } catch { /* already stopped */ }
         recognition = null;
     }
-    stopMeter();
+    stopPulse();
     setLive(false);
 }
 
@@ -167,58 +188,48 @@ function setLive(live) {
     micBtn.classList.toggle('cap-mic-live', live);
     micBtn.setAttribute('aria-pressed', String(live));
     micBtn.title = live ? 'Listening — release to stop' : 'Hold to talk (online voice)';
-    if (hintEl) {
-        if (live) { hintText = hintEl.textContent; hintEl.textContent = '🔴 Listening — release to stop'; }
-        else if (hintText) { hintEl.textContent = hintText; hintText = ''; }
+    if (!live) setHint(null);
+}
+
+function setHint(text) {
+    if (!hintEl) return;
+    if (text != null) {
+        if (!hintText) hintText = hintEl.textContent;
+        hintEl.textContent = text;
+    } else if (hintText) {
+        hintEl.textContent = hintText;
+        hintText = '';
     }
 }
 
-// ---- sound-level meter -------------------------------------------------------
-// Web Speech reports no audio levels, so a parallel WebAudio analyser reads the
-// mic (same permission grant) and drives the button's --mic-level custom
-// property: the ring you see moving IS your voice being detected.
+// ---- activity pulse ----------------------------------------------------------
+// Drives the button's --mic-level property from the RECOGNIZER's events
+// (audiostart/soundstart/speechstart/result): a bump means the engine really
+// registered sound. Deliberately no second getUserMedia stream — a parallel
+// capture degrades or breaks recognition on many devices.
 
-let meter = null; // { stream, ctx, raf }
+let pulse = null; // rAF id
+let level = 0;
 
-async function startMeter() {
-    if (meter || !navigator.mediaDevices?.getUserMedia) return;
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        const ctx = new Ctx();
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 512;
-        ctx.createMediaStreamSource(stream).connect(analyser);
-        const buf = new Uint8Array(analyser.fftSize);
-        meter = { stream, ctx, raf: 0 };
-
-        let smooth = 0;
-        const tick = () => {
-            if (!meter) return;
-            analyser.getByteTimeDomainData(buf);
-            let sum = 0;
-            for (let i = 0; i < buf.length; i++) {
-                const d = (buf[i] - 128) / 128;
-                sum += d * d;
-            }
-            // RMS → 0..1 with a fast attack and slow release, so the ring
-            // jumps when you speak and settles when you pause.
-            const level = Math.min(1, Math.sqrt(sum / buf.length) * 4);
-            smooth = level > smooth ? level : smooth * 0.85;
-            micBtn.style.setProperty('--mic-level', smooth.toFixed(3));
-            meter.raf = requestAnimationFrame(tick);
-        };
-        meter.raf = requestAnimationFrame(tick);
-    } catch { /* meter is decoration — recognition still works without it */ }
+function bumpLevel(v) {
+    level = Math.max(level, Math.min(1, v));
 }
 
-function stopMeter() {
-    if (!meter) return;
-    cancelAnimationFrame(meter.raf);
-    for (const t of meter.stream.getTracks()) t.stop();
-    meter.ctx.close().catch(() => {});
-    meter = null;
-    micBtn.style.setProperty('--mic-level', '0');
+function startPulse() {
+    level = 0;
+    const tick = () => {
+        level *= 0.92; // decay between events
+        micBtn.style.setProperty('--mic-level', level.toFixed(3));
+        pulse = requestAnimationFrame(tick);
+    };
+    if (!pulse) pulse = requestAnimationFrame(tick);
+}
+
+function stopPulse() {
+    if (pulse) cancelAnimationFrame(pulse);
+    pulse = null;
+    level = 0;
+    if (micBtn) micBtn.style.setProperty('--mic-level', '0');
 }
 
 // ---- language toggle ---------------------------------------------------------
