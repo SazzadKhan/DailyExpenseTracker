@@ -12,7 +12,9 @@ import { store } from '../../core/store.js';
 import { STORAGE_KEYS } from '../../core/constants.js';
 import { getLocalDateString, formatDate, formatCurrency } from '../../core/format.js';
 import { commitEntries } from './commit-entries.js';
+import { addSubcategory } from '../categories/actions.js';
 import { parse } from './parser.js';
+import { getLearnedLookup, recordOutcome, nextSuggestion, acceptSuggestion, dismissSuggestion } from './learned.js';
 import { extractWithLLM } from './engine-llm.js';
 import { DEFAULT_MODELS } from './providers.js';
 import { startTrialIfNeeded, getEntitlement, activateLicense, TRIAL_DAYS } from './entitlement.js';
@@ -57,6 +59,8 @@ export function mount() {
     delegate(messagesEl, 'click', '[data-role="confirm-add"]', onConfirm);
     delegate(messagesEl, 'click', '[data-role="cancel-add"]', onCancel);
     delegate(messagesEl, 'click', '[data-role="activate-license"]', onActivate);
+    delegate(messagesEl, 'click', '[data-role="suggest-accept"]', onSuggestAccept);
+    delegate(messagesEl, 'click', '[data-role="suggest-dismiss"]', onSuggestDismiss);
 }
 
 // ---- panel lifecycle -------------------------------------------------------
@@ -206,7 +210,8 @@ async function handleSend() {
         const result = parse(text, {
             categories: s.categories,
             todayStr: getLocalDateString(new Date()),
-            currencyCode: s.settings?.currency
+            currencyCode: s.settings?.currency,
+            learned: getLearnedLookup(s.categories)
         });
         const logId = logInteraction({ rawText: text, engine: 'parser', entries: result.entries });
         if (!result.entries.length) {
@@ -271,13 +276,14 @@ function onConfirm(_ev, btn) {
     const selected = checkedIdx.map(i => rec.entries[i]).filter(Boolean);
 
     const currency = store.getState().settings?.currency;
-    const { okIds, errors } = commitEntries(selected, { currency });
+    const { accepted, okIds, errors } = commitEntries(selected, { currency });
 
     markOutcome(rec.logId, {
         acceptedIds: okIds,
         deselectedCount: rec.entries.length - selected.length,
         cancelled: selected.length === 0
     });
+    if (accepted.length) recordOutcome(accepted);
     pending.delete(id);
 
     addBubble('bot',
@@ -287,6 +293,7 @@ function onConfirm(_ev, btn) {
         ...errors.map(t => el('p', { class: 'xbot-error' }, t))
     );
     card.remove();
+    maybeSuggestSubcategory();
 }
 
 function onCancel(_ev, btn) {
@@ -303,6 +310,49 @@ function onCancel(_ev, btn) {
 
 function disablePreview(card) {
     $$('button, input', card).forEach(elm => { /** @type {HTMLInputElement} */ (elm).disabled = true; });
+}
+
+// ---- taxonomy suggestions ---------------------------------------------------
+// A word the parser keeps failing on (3+ days in a month) earns one offer to
+// become a real subcategory. Accepting seeds the learned index, so the very
+// next parse files that word automatically.
+
+function maybeSuggestSubcategory() {
+    const sug = nextSuggestion(store.getState().categories);
+    if (!sug) return;
+    const bubble = addBubble('bot',
+        el('p', {}, `I've seen “${sug.word}” ${sug.count} times but I don't have a category for it. Want a “${sug.label}” subcategory under ${sug.category} so I can file it automatically?`),
+        el('div', { class: 'xbot-actions' },
+            el('button', {
+                class: 'xbot-btn-confirm',
+                dataset: { role: 'suggest-accept', word: sug.word, label: sug.label, category: sug.category }
+            }, `✓ Create “${sug.label}”`),
+            el('button', {
+                class: 'xbot-btn-cancel',
+                dataset: { role: 'suggest-dismiss', word: sug.word }
+            }, 'No thanks')
+        )
+    );
+    bubble.classList.add('xbot-suggestion');
+}
+
+function onSuggestAccept(_ev, btn) {
+    const { word, label, category } = /** @type {HTMLElement} */ (btn).dataset;
+    disablePreview(btn.closest('.xbot-bubble'));
+    const res = addSubcategory(category, label);
+    if (!res.ok && res.error !== 'Subcategory already exists') {
+        addBubble('bot', el('p', { class: 'xbot-error' }, res.error));
+        return;
+    }
+    acceptSuggestion(word, category, label);
+    addBubble('bot', el('p', {}, `Done — “${label}” now lives under ${category}, and I'll use it for “${word}” from now on. 🎉`));
+}
+
+function onSuggestDismiss(_ev, btn) {
+    const word = /** @type {HTMLElement} */ (btn).dataset.word;
+    disablePreview(btn.closest('.xbot-bubble'));
+    dismissSuggestion(word);
+    addBubble('bot', el('p', {}, 'Okay, I won\'t ask about that one again.'));
 }
 
 // ---- helpers ---------------------------------------------------------------

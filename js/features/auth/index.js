@@ -17,6 +17,7 @@ import { log } from '../../core/log.js';
 const $log = log('auth');
 
 const AUTH_MODE_KEY = STORAGE_KEYS.AUTH_MODE;
+const GUEST_MODE_CHOSEN_KEY = STORAGE_KEYS.GUEST_MODE_CHOSEN;
 const LAST_EMAIL_KEY = STORAGE_KEYS.LAST_SIGNED_IN_EMAIL;
 
 function getAuthMode() {
@@ -26,6 +27,17 @@ function setAuthMode(mode) {
     try {
         if (mode) localStorage.setItem(AUTH_MODE_KEY, mode);
         else localStorage.removeItem(AUTH_MODE_KEY);
+    } catch (_) {}
+}
+
+function getGuestModeChosen() {
+    try { return localStorage.getItem(GUEST_MODE_CHOSEN_KEY) === '1'; } catch (_) { return false; }
+}
+
+function setGuestModeChosen(chosen) {
+    try {
+        if (chosen) localStorage.setItem(GUEST_MODE_CHOSEN_KEY, '1');
+        else localStorage.removeItem(GUEST_MODE_CHOSEN_KEY);
     } catch (_) {}
 }
 
@@ -150,6 +162,7 @@ function setupLanding() {
     if (guestBtn) {
         guestBtn.addEventListener('click', () => {
             setAuthMode('guest');
+            setGuestModeChosen(true);
             hideLanding();
             renderAuthUi();
         });
@@ -373,39 +386,51 @@ export function renderAuthUi() {
 }
 
 async function initAuthAndStorage() {
-    const clientId = /** @type {any} */ (window).GOOGLE_OAUTH_CLIENT_ID;
-    const configured = await auth.init(clientId);
+    try {
+        const clientId = /** @type {any} */ (window).GOOGLE_OAUTH_CLIENT_ID;
+        const configured = await auth.init(clientId);
 
-    auth.onChange(renderAuthUi);
-    setupAuthUi();
-    setupLanding();
+        auth.onChange(renderAuthUi);
+        setupAuthUi();
+        setupLanding();
 
-    if (!configured) {
-        setAuthMode('guest');
-        hideLanding();
-        renderAuthUi();
-        return;
-    }
-
-    const mode = getAuthMode();
-
-    if (mode === 'google' && auth.getProfile()) {
-        const ok = await auth.silentSignIn();
-        if (ok) {
-            await activateCloudBackend({ initial: true });
+        if (!configured) {
+            setAuthMode('guest');
+            setGuestModeChosen(true);
+            hideLanding();
             renderAuthUi();
             return;
         }
-        setAuthMode(null);
-    }
 
-    if (mode === 'guest') {
+        const mode = getAuthMode();
+
+        if (mode === 'google' && auth.getProfile()) {
+            const ok = await auth.silentSignIn();
+            if (ok) {
+                await activateCloudBackend({ initial: true });
+                renderAuthUi();
+                return;
+            }
+            setAuthMode(null);
+        }
+
+        if (mode === 'guest') {
+            setGuestModeChosen(true);
+            renderAuthUi();
+            return;
+        }
+
+        if (getGuestModeChosen()) {
+            setAuthMode('guest');
+            renderAuthUi();
+            return;
+        }
+
+        showLanding();
         renderAuthUi();
-        return;
+    } finally {
+        document.body.classList.remove('auth-pending');
     }
-
-    showLanding();
-    renderAuthUi();
 }
 
 export function mount() {

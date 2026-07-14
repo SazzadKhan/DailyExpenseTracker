@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Extreme input lines — live parser demo</title>
+    <style>
+        body { font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; padding: 24px; background:#0f172a; color:#f8fafc; max-width: 900px; margin: 0 auto; }
+        h1 { margin: 0 0 4px; }
+        .sub { color:#94a3b8; margin: 0 0 20px; }
+        .case { border: 1px solid #334155; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+        .case h2 { margin: 0 0 6px; font-size: 15px; }
+        .num { color:#38bdf8; }
+        .line { display:inline-block; background:#1e293b; padding: 4px 10px; border-radius: 6px; font-family: ui-monospace, Menlo, monospace; margin: 4px 0 8px; }
+        table { border-collapse: collapse; width: 100%; margin: 6px 0; }
+        th, td { text-align: left; padding: 4px 10px 4px 0; border-bottom: 1px solid #1e293b; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+        th { color:#94a3b8; font-weight: 500; }
+        .flag { color:#fbbf24; }
+        .good { color:#10b981; }
+        .bad  { color:#ef4444; }
+        .note { color:#94a3b8; font-size: 13px; margin: 6px 0 0; }
+        .note b { color:#f8fafc; }
+        .step { color:#38bdf8; font-size: 13px; margin: 10px 0 2px; font-weight: 600; }
+        .unmatched { color:#fbbf24; font-size: 13px; }
+        .verdict { font-size: 13px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; background:#1e293b; }
+    </style>
+</head>
+<body>
+    <h1>Extreme input lines — live parser demo</h1>
+    <p class="sub">Every row below is produced by the <em>real</em> <code>parser.js</code> + <code>learned.js</code>
+       modules, right now, with default categories and BDT as the user currency. Nothing is mocked.</p>
+    <div id="out"></div>
+
+    <script type="module">
+        import { parse, buildKeywordIndex } from '../js/features/assistant/parser.js';
+        import {
+            emptyLearned, recordOutcomeIn, buildLearnedLookup, findSuggestion,
+            acceptSuggestionIn, dismissSuggestionIn
+        } from '../js/features/assistant/learned.js';
+        import { DEFAULT_CATEGORIES } from '../js/core/constants.js';
+        import { getLocalDateString } from '../js/core/format.js';
+
+        const out = document.getElementById('out');
+        const today = getLocalDateString(new Date());
+        const dayShift = (n) => {
+            const [y, m, d] = today.split('-').map(Number);
+            return getLocalDateString(new Date(y, m - 1, d - n));
+        };
+        const pctx = { categories: DEFAULT_CATEGORIES, todayStr: today, currencyCode: 'BDT' };
+
+        function entryTable(entries, unmatched) {
+            if (!entries.length && !(unmatched || []).length) return el('p', 'note', '(nothing)');
+            const frag = document.createDocumentFragment();
+            if (entries.length) {
+                const t = document.createElement('table');
+                t.innerHTML = '<tr><th>date</th><th>category › sub</th><th>amount</th><th>confidence</th><th>review</th><th>description</th></tr>';
+                for (const e of entries) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML =
+                        `<td>${e.date}</td><td>${esc(e.category)} › ${esc(e.subcategory)}</td>` +
+                        `<td>${e.amount}</td><td>${e.confidence}</td>` +
+                        `<td>${e.needsReview ? '<span class="flag">⚠ yes</span>' : '<span class="good">no</span>'}</td>` +
+                        `<td>${esc(e.description)}</td>`;
+                    t.append(tr);
+                }
+                frag.append(t);
+            }
+            if ((unmatched || []).length) {
+                frag.append(el('p', 'unmatched', 'unmatched: ' + unmatched.join(' · ')));
+            }
+            return frag;
+        }
+
+        function el(tag, cls, text) {
+            const n = document.createElement(tag);
+            if (cls) n.className = cls;
+            if (text != null) n.textContent = text;
+            return n;
+        }
+        function esc(s) {
+            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        }
+
+        let n = 0;
+        function showCase(title, line, verdict, build) {
+            n++;
+            const card = el('div', 'case');
+            const h = el('h2');
+            h.append(el('span', 'num', `#${n} `), document.createTextNode(title));
+            card.append(h);
+            if (line) card.append(el('code', 'line', line));
+            build(card);
+            if (verdict) {
+                const v = el('div', 'verdict');
+                v.innerHTML = verdict;
+                card.append(v);
+            }
+            out.append(card);
+        }
+
+        function parseCase(title, line, verdict) {
+            showCase(title, line, verdict, card => {
+                const r = parse(line, pctx);
+                card.append(entryTable(r.entries, r.unmatched));
+            });
+        }
+
+        // ---- 1–10: parser stress ------------------------------------------------
+
+        parseCase('Last-number-wins amount bug', 'coffee 60 2 days ago',
+            '<span class="bad">LIMIT:</span> "2 days ago" is not date grammar, and the <b>last</b> number is taken as the amount — coffee logged for <b>2</b>, not 60, with no ⚠. Silent wrong amount.');
+
+        parseCase('No-digit chunk blocks the "and" split', 'spent $25 on netflix and 1,200 tk internet bill and biryani',
+            '<span class="bad">LIMIT:</span> "biryani" has no number, so nothing splits — one entry, amount 1200, the $25 Netflix swallowed into the description. The $ vs BDT conflict at least flags ⚠.');
+
+        parseCase('Bengali script words + Bengali "and"', '৳১২০ চা এবং ৫০ rickshaw',
+            '<span class="bad">LIMIT:</span> Bengali digits convert, but "এবং" (and) is not a split point and "চা" in Bengali script matches nothing — one entry, the 120 lost.');
+
+        parseCase('Income guard + k-shorthand + split', 'got paid salary 50k and gave zakat 5k',
+            '<span class="good">SHOULD WORK:</span> both chunks have digits so "and" splits; income intent is per-segment. Expect Income›Salary 50000 + Other›Charity 5000.');
+
+        parseCase('Negative amount', '-500 lunch refund',
+            '<span class="bad">LIMIT:</span> the minus sign is invisible to the amount regex — logged as <b>+500</b>. "refund" at least forces ⚠.');
+
+        parseCase('Bare number, no words', '1200',
+            'Safe but useless: Other ⚠ with a placeholder description.');
+
+        parseCase('Zero amount', 'lunch 0',
+            '<span class="good">FAILSAFE:</span> zero is rejected into <em>unmatched</em> — no entry invented.');
+
+        parseCase('Future date accepted', 'dinner 800 on 2026-12-31',
+            '<span class="bad">LIMIT:</span> there is no future-date guard — the literal date is trusted.');
+
+        parseCase('Category-name word hijacks a clearer synonym', 'netflix er bill 1100 taka dilam',
+            '<span class="bad">LIMIT:</span> "bill" is a word inside the category name <em>Bills &amp; Utilities</em>, and taxonomy beats the synonym pack — files as Bills &amp; Utilities, not Entertainment, unflagged.');
+
+        parseCase('No duplicate detection', 'rent 1,200 and rent 1,200',
+            '<span class="bad">LIMIT:</span> two identical entries, no dedupe warning.');
+
+        // ---- 11–15: the new learning layer ---------------------------------------
+
+        showCase('Unknown words land in the miss tracker', 'bkash cashout 18.50', null, card => {
+            card.append(el('p', 'step', 'first, a surprise — “bkash cashout fee 18.50”:'));
+            card.append(entryTable(parse('bkash cashout fee 18.50', pctx).entries, []));
+            card.append(el('p', 'note', '“fee” matches the default Other › Fees subcategory name, so the whole line files there confidently and nothing is tracked. Drop the word “fee”:'));
+            const data = emptyLearned(today);
+            const r = parse('bkash cashout 18.50', pctx);
+            card.append(entryTable(r.entries, r.unmatched));
+            recordOutcomeIn(data, r.entries, today);
+            card.append(el('p', 'step', 'miss tracker after confirming:'));
+            card.append(el('code', 'line', JSON.stringify(data.misses)));
+            const v = el('div', 'verdict');
+            v.innerHTML = 'Now “bkash” and “cashout” are tracked misses. Nothing was learned as a classification — a fallback category is a default, not knowledge. (The “fee” detour is itself a limitation: a generic word inside a subcategory name confidently absorbs a line it barely understands.)';
+            card.append(v);
+        });
+
+        showCase('3 distinct miss-days earn a suggestion (same-day repeats don’t)', null, null, card => {
+            const sameDay = emptyLearned(today);
+            for (let i = 0; i < 3; i++) {
+                recordOutcomeIn(sameDay, parse('bkash cashout 18.50', pctx).entries, today);
+            }
+            card.append(el('p', 'step', '3 confirms on the SAME day → suggestion:'));
+            card.append(el('code', 'line', JSON.stringify(findSuggestion(sameDay, DEFAULT_CATEGORIES, today))));
+
+            const threeDays = emptyLearned(today);
+            for (const d of [dayShift(2), dayShift(1), today]) {
+                recordOutcomeIn(threeDays, parse('bkash cashout 18.50', pctx).entries, d);
+            }
+            card.append(el('p', 'step', 'same 3 confirms across 3 days → suggestion:'));
+            card.append(el('code', 'line', JSON.stringify(findSuggestion(threeDays, DEFAULT_CATEGORIES, today))));
+            window.__demoData = threeDays; // handed to the next two cases
+            const v = el('div', 'verdict');
+            v.innerHTML = '<span class="good">BY DESIGN:</span> null on the same day (no mid-session nagging), a real offer after 3 distinct days. In the app this appears as “create a “Bkash” subcategory under Other?” after your next confirm.';
+            card.append(v);
+        });
+
+        showCase('Accepting the suggestion → auto-files next time', 'bkash 200', null, card => {
+            const data = window.__demoData;
+            acceptSuggestionIn(data, 'bkash', 'Other', 'Bkash');
+            const cats = { ...DEFAULT_CATEGORIES, Other: { ...DEFAULT_CATEGORIES.Other, subcategories: [...DEFAULT_CATEGORIES.Other.subcategories, 'Bkash'] } };
+            const r = parse('bkash 200', { ...pctx, categories: cats, learned: buildLearnedLookup(data, cats) });
+            card.append(entryTable(r.entries, r.unmatched));
+            const v = el('div', 'verdict');
+            v.innerHTML = '<span class="good">THE LOOP CLOSES:</span> same word that was Other ⚠ in #11 now files under Other › Bkash — high confidence, no review flag, fully offline.';
+            card.append(v);
+        });
+
+        showCase('Dismissal is permanent', null, null, card => {
+            const data = emptyLearned(today);
+            for (const d of [dayShift(2), dayShift(1), today]) {
+                recordOutcomeIn(data, parse('lottery ticket 100', pctx).entries, d);
+            }
+            card.append(el('p', 'step', 'suggestion before dismissing:'));
+            card.append(el('code', 'line', JSON.stringify(findSuggestion(data, DEFAULT_CATEGORIES, today))));
+            dismissSuggestionIn(data, 'lottery');
+            recordOutcomeIn(data, parse('lottery ticket 100', pctx).entries, today);
+            card.append(el('p', 'step', 'after “No thanks” + one more miss:'));
+            card.append(el('code', 'line', JSON.stringify(findSuggestion(data, DEFAULT_CATEGORIES, today))));
+            const v = el('div', 'verdict');
+            v.innerHTML = '“lottery” is silenced for good — but <span class="bad">LIMIT:</span> its sibling word from the very same phrase (“ticket”) is offered next. Dismissal is per-word, not per-phrase, so a multi-word unknown can nag once per word.';
+            card.append(v);
+        });
+
+        showCase('Income guard also applies to learned mappings', 'investment 5000', null, card => {
+            const r = parse('investment 5000', pctx);
+            card.append(entryTable(r.entries, r.unmatched));
+            // even a strongly learned income word must not flip without intent
+            const data = emptyLearned(today);
+            for (let i = 0; i < 2; i++) {
+                recordOutcomeIn(data, [{ category: 'Income', subcategory: 'Salary', description: 'gigmoney', confidence: 'high' }], today);
+            }
+            const learned = buildLearnedLookup(data, DEFAULT_CATEGORIES);
+            card.append(el('p', 'step', 'learned income word WITHOUT income wording — “gigmoney 5000”:'));
+            card.append(entryTable(parse('gigmoney 5000', { ...pctx, learned }).entries, []));
+            card.append(el('p', 'step', 'WITH income wording — “received gigmoney 5000”:'));
+            card.append(entryTable(parse('received gigmoney 5000', { ...pctx, learned }).entries, []));
+            const v = el('div', 'verdict');
+            v.innerHTML = '<span class="good">GUARDED:</span> a lone noun colliding with an income name resolves to the expense reading + ⚠; only explicit income wording unlocks the learned income mapping.';
+            card.append(v);
+        });
+    </script>
+</body>
+</html>

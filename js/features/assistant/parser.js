@@ -10,8 +10,9 @@
 // Classification order (first hit wins):
 //   1. curated phrase overrides ("gas bill" is a utility, not vehicle fuel)
 //   2. the user's own category/subcategory names (bigrams, then single words)
-//   3. built-in synonym pack (validated against the user's actual categories)
-//   4. income-intent fallback ("got paid 20k"), else Other + review flag
+//   3. learned index — this user's accepted history (ctx.learned, learned.js)
+//   4. built-in synonym pack (validated against the user's actual categories)
+//   5. income-intent fallback ("got paid 20k"), else Other + review flag
 //
 // Income guard: a lone noun colliding with an income subcategory ("gift",
 // "investment") must never flip a transaction to income. Only explicit income
@@ -281,13 +282,15 @@ for (const [k, v] of Object.entries(SYNONYMS)) SYN.set(fold(k), v);
 /**
  * Parse free text into candidate expense entries.
  * @param {string} text
- * @param {{ categories?: object, todayStr?: string, currencyCode?: string }} [ctx]
+ * @param {{ categories?: object, todayStr?: string, currencyCode?: string,
+ *           learned?: Map<string, {category:string, subcategory:string|null, income:boolean}> }} [ctx]
  * @returns {{ entries: ParsedEntry[], unmatched: string[] }}
  */
 export function parse(text, ctx = {}) {
     const categories = ctx.categories || {};
     const todayStr = ctx.todayStr || getLocalDateString(new Date());
     const currencyCode = ctx.currencyCode || null;
+    const learned = ctx.learned || null;
     const index = buildKeywordIndex(categories);
 
     const entries = [];
@@ -314,7 +317,7 @@ export function parse(text, ctx = {}) {
         }
 
         const incomeIntent = INCOME_INTENT.test(p.raw);
-        const match = matchCategory(p.cleaned, index, categories, { incomeIntent });
+        const match = matchCategory(p.cleaned, index, categories, { incomeIntent, learned });
 
         let category, subcategory, confidence, needsReview;
         if (match) {
@@ -450,13 +453,13 @@ function stripCurrencyTokens(s) {
 }
 
 /** Case-fold + naive singular fold so "concert"/"Concerts" meet in the middle. */
-function fold(w) {
+export function fold(w) {
     w = w.toLowerCase();
     if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0, -1);
     return w;
 }
 
-function foldWords(s) {
+export function foldWords(s) {
     return splitWords(s).map(fold);
 }
 
@@ -468,7 +471,13 @@ function foldWords(s) {
  * category-only entries within a slot. Multi-word names are also indexed as
  * one folded phrase key for the bigram pass ("public transit").
  */
+const INDEX_CACHE = new WeakMap();
+
 export function buildKeywordIndex(categories) {
+    // Categories objects are replaced, never mutated (store rule #3), so the
+    // object reference is a safe cache key across parse() calls.
+    const cached = categories && INDEX_CACHE.get(categories);
+    if (cached) return cached;
     const index = new Map();
     const putKey = (key, val) => {
         if (key.length < 3 || key === 'other' || key === 'and') return;
@@ -490,6 +499,7 @@ export function buildKeywordIndex(categories) {
             addName(sub, { category: name, subcategory: sub, income });
         }
     }
+    if (categories) INDEX_CACHE.set(categories, index);
     return index;
 }
 
@@ -499,14 +509,15 @@ function splitWords(s) {
 
 /**
  * Match a segment against: curated phrases, then the user's taxonomy
- * (bigrams before single words), then the synonym pack.
+ * (bigrams before single words), then the learned index (this user's
+ * accepted history), then the synonym pack.
  * @param {string} cleaned segment with amount/date removed
  * @param {Map} index from buildKeywordIndex
  * @param {object} categories the user's categories
- * @param {{ incomeIntent?: boolean }} [opts]
+ * @param {{ incomeIntent?: boolean, learned?: Map|null }} [opts]
  * @returns {{ category:string, subcategory:string|null, incomeAmbiguous:boolean } | null}
  */
-export function matchCategory(cleaned, index, categories, { incomeIntent = false } = {}) {
+export function matchCategory(cleaned, index, categories, { incomeIntent = false, learned = null } = {}) {
     for (const [re, cat, sub] of PHRASES) {
         if (!re.test(cleaned) || !categories?.[cat]) continue;
         const subs = categories[cat].subcategories || [];
@@ -538,6 +549,23 @@ export function matchCategory(cleaned, index, categories, { incomeIntent = false
         }
         if (!catOnly) catOnly = v;
     }
+
+    // Learned index — the user's own accepted history. Beats the generic
+    // synonym pack, and a subcategory-level hit beats a category-only
+    // taxonomy hit. Same income guard as everything else: learned mappings
+    // into an income category need explicit income wording.
+    if (learned) {
+        for (const w of words) {
+            const hit = learned.get(w);
+            if (!hit) continue;
+            if (hit.income && !incomeIntent) { sawIncomeCollision = true; continue; }
+            if (hit.subcategory) {
+                return { category: hit.category, subcategory: hit.subcategory, incomeAmbiguous: sawIncomeCollision };
+            }
+            if (!catOnly) catOnly = hit;
+        }
+    }
+
     if (catOnly) {
         return { category: catOnly.category, subcategory: null, incomeAmbiguous: sawIncomeCollision };
     }

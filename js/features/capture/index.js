@@ -15,10 +15,12 @@ import { store } from '../../core/store.js';
 import { getLocalDateString, formatDate, formatCurrency } from '../../core/format.js';
 import { remove } from '../expenses/actions.js';
 import { open as openEditModal } from '../expenses/edit-modal.js';
+import { addSubcategory } from '../categories/actions.js';
 import { isIncomeCategory } from '../categories/categories.model.js';
 import { commitEntries } from '../assistant/commit-entries.js';
 import { parse } from '../assistant/parser.js';
 import { logInteraction, markOutcome, exportLog } from '../assistant/audit-log.js';
+import { getLearnedLookup, recordOutcome, nextSuggestion, acceptSuggestion, dismissSuggestion } from '../assistant/learned.js';
 
 let inputEl, submitEl, receiptEl;
 
@@ -51,6 +53,8 @@ export function mount() {
 
     delegate(receiptEl, 'click', '[data-role="cap-amend"]', onAmend);
     delegate(receiptEl, 'click', '[data-role="cap-undo"]', onUndo);
+    delegate(receiptEl, 'click', '[data-role="cap-suggest-accept"]', onSuggestAccept);
+    delegate(receiptEl, 'click', '[data-role="cap-suggest-dismiss"]', onSuggestDismiss);
 }
 
 // ---- capture flow ----------------------------------------------------------
@@ -64,7 +68,8 @@ function handleSubmit() {
     const result = parse(text, {
         categories: s.categories,
         todayStr: getLocalDateString(new Date()),
-        currencyCode: currency
+        currencyCode: currency,
+        learned: getLearnedLookup(s.categories)
     });
     const logId = logInteraction({ rawText: text, engine: 'parser', entries: result.entries });
 
@@ -75,9 +80,10 @@ function handleSubmit() {
     }
 
     // Save everything optimistically; a wrong guess is flagged, never dropped.
-    const { saved, okIds, errors } = commitEntries(result.entries, { currency });
+    const { saved, accepted, okIds, errors } = commitEntries(result.entries, { currency });
 
     markOutcome(logId, { acceptedIds: okIds });
+    if (accepted.length) recordOutcome(accepted);
     inputEl.value = '';
     renderReceipt(saved, result.unmatched, errors);
 }
@@ -122,7 +128,27 @@ function renderReceipt(saved, unmatched, errors) {
     for (const err of (errors || [])) {
         receiptEl.append(el('p', { class: 'cap-error' }, err));
     }
+    appendSuggestion();
     setVisible(receiptEl, true);
+}
+
+/** One-line "create a subcategory?" offer for a word that keeps missing. */
+function appendSuggestion() {
+    const sug = nextSuggestion(store.getState().categories);
+    if (!sug) return;
+    receiptEl.append(
+        el('div', { class: 'cap-suggest', dataset: { role: 'cap-suggest' } },
+            el('span', {}, `“${sug.word}” keeps landing in ${sug.category} — create a “${sug.label}” subcategory?`),
+            el('button', {
+                class: 'cap-suggest-btn',
+                dataset: { role: 'cap-suggest-accept', word: sug.word, label: sug.label, category: sug.category }
+            }, '✓ Create'),
+            el('button', {
+                class: 'cap-suggest-btn cap-suggest-no',
+                dataset: { role: 'cap-suggest-dismiss', word: sug.word }
+            }, 'No')
+        )
+    );
 }
 
 /** Build the "✓ N logged · ৳ out · ৳ in" summary from the rows still present. */
@@ -180,4 +206,19 @@ function onUndo(_ev, btn) {
     if (row) row.remove();
     if (!$$('.cap-row', receiptEl).length) setVisible(receiptEl, false);
     else refreshSummary();
+}
+
+function onSuggestAccept(_ev, btn) {
+    const { word, label, category } = /** @type {HTMLElement} */ (btn).dataset;
+    const res = addSubcategory(category, label);
+    if (!res.ok && res.error !== 'Subcategory already exists') return;
+    acceptSuggestion(word, category, label);
+    const row = /** @type {Element} */ (btn).closest('[data-role="cap-suggest"]');
+    if (row) row.replaceChildren(el('span', {}, `✓ “${label}” added under ${category} — I'll file “${word}” there from now on.`));
+}
+
+function onSuggestDismiss(_ev, btn) {
+    dismissSuggestion(/** @type {HTMLElement} */ (btn).dataset.word);
+    const row = /** @type {Element} */ (btn).closest('[data-role="cap-suggest"]');
+    if (row) row.remove();
 }
