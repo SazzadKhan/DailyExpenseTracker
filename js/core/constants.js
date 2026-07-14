@@ -28,6 +28,8 @@ export const STORAGE_KEYS = Object.freeze({
     ASSISTANT_LOG: 'assistantLog',
     ASSISTANT_ONBOARDED: 'assistantOnboarded',
     ASSISTANT_LEARNED: 'assistantLearned'
+    // (voiceLang / voiceOnlineConsent / voiceTipDismissed belonged to the
+    // removed voice-input feature; stale values in existing browsers are inert.)
 });
 
 /** Default settings applied for new users / when localStorage is empty. */

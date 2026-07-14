@@ -1,5 +1,17 @@
 # XpenseBot Parser Limitations — Edge Cases Requiring LLM
 
+> **Status update (parser v3, 2026-07):** several failure cases below are now
+> FIXED by rules — run-on/multi-entry splitting ("50 banna 50 riksha"), typo
+> tolerance, Bengali-script words ("রিকশা ৫০"), "N days ago"/"gotokal"/"last
+> month" dates, future-date and negative-amount flags, quantity guards, and
+> the "netflix er bill" category hijack. See `PARSER_RULES.md` for current
+> behavior with verified examples, `PARSER_GUIDE.md` for architecture, and
+> `tests/extreme-suite.html` for live proof (150 cases, v2 vs v3). The
+> *semantic* limitations below — transaction-boundary ambiguity with one
+> shared amount, billing-period dates ("for July"), refund/transfer/loan
+> meaning, duplicates, corrections via chat — still stand and remain the LLM
+> tier's job.
+
 The rule-based parser handles ~85% of simple expense logging. The remaining 15% — particularly high-value transactions and complex financial semantics — require LLM reasoning.
 
 ## 1. Transaction Boundary Ambiguity (Hard)
