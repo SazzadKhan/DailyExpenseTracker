@@ -109,7 +109,7 @@ const PHRASES = [
     [/\b(?:current|electric(?:ity)?|bidyut)\s+bill\b/i, 'Bills & Utilities', 'Electricity'],
     [/\b(?:water|wasa|pani)\s+bill\b/i, 'Bills & Utilities', 'Water'],
     [/\bpathao\s+food\b/i, 'Food & Dining', 'Delivery'],
-    // Bengali script (no \b — ASCII-only): bill phrases from bn-BD voice
+    // Bengali script (no \b — ASCII-only): bill phrases from bn-BD dictation
     [/(?:কারেন্ট|বিদ্যুৎ|ইলেকট্রিক)\s*বিল/, 'Bills & Utilities', 'Electricity'],
     [/পানির?\s*বিল/, 'Bills & Utilities', 'Water'],
     [/গ্যাস(?:ের)?\s*বিল/, 'Bills & Utilities', 'Other'],
@@ -562,7 +562,7 @@ export function normalize(text) {
 }
 
 // Spoken amounts, three vocabularies: English, Latin Banglish, Bengali script.
-// bn-BD voice writes "পঞ্চাশ টাকা", not "৫০". Additive values; Latin "at" (8)
+// bn-BD dictation writes "পঞ্চাশ টাকা", not "৫০". Additive values; Latin "at" (8)
 // is deliberately absent — it's an English word ("at 3" is a time).
 const NUM_UNITS = {
     one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
@@ -810,7 +810,7 @@ export function extractAmount(seg) {
 function detectCurrency(seg) {
     const sym = seg.match(/[৳$£€₹¥]/);
     if (sym) return CURRENCY_SYMBOLS[sym[0]];
-    if (/টাকা/.test(seg)) return 'BDT'; // bn-BD voice writes the word out
+    if (/টাকা/.test(seg)) return 'BDT'; // bn-BD dictation writes the word out
     CURRENCY_WORD_RE.lastIndex = 0;
     const word = CURRENCY_WORD_RE.exec(seg);
     if (word) return CURRENCY_WORDS[word[1].toLowerCase()];

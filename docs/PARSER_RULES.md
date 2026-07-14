@@ -24,7 +24,7 @@ anything unreadable lands in `unmatched` instead of becoming an entry.
 | …but a lone small unit stays a word | `one coffee` | unchanged (never amount 1) |
 | k-shorthand | `salary 50k` / `coffee 3.5k` | `salary 50000` / `coffee 3500` |
 
-Voice note: bn-BD speech recognition outputs Bengali script and often writes
+Dictation note: bn-BD keyboard dictation outputs Bengali script and often writes
 amounts as words — both are first-class inputs. `টাকা` is detected and
 stripped as a currency word like `taka`/`tk`.
 
@@ -95,7 +95,7 @@ Priority order (see PARSER_GUIDE.md for why):
    built-in pack: if you've filed "burger" under Delivery twice, `burger 450`
    files under Delivery, not Fast Food.
 4. **Synonym pack** — ~300 spoken words in English, Banglish, and Bengali
-   script, including the transliterated loanwords bn-BD voice emits
+   script, including the transliterated loanwords bn-BD dictation emits
    (`লাঞ্চ`, `সিএনজি`, `ইন্টারনেট`, `রিচার্জ`): `riksha 35` → Public Transit;
    `ডিম ১২০ দুধ ৯০` → two Groceries entries; `daraz 3200` → Online Shopping;
    Bengali bill phrases (`কারেন্ট বিল`, `পানির বিল`) are curated overrides.
@@ -170,7 +170,7 @@ taka` → the $12 entry is ⚠, the 60 entry is clean.
 
 - 195-case extreme suite: v2 55/150 on waves 1–2 → **v3 195/195**. Blind
   first-contact scores before each wave's fixes: wave 2 (unseen typed input)
-  68/100; wave 3 (bn-BD voice transcripts) 4/45 — every miss in every blind
+  68/100; wave 3 (bn-BD dictation transcripts) 4/45 — every miss in every blind
   run failed safe as flagged ⚠, never silently wrong.
 - 51-line realistic corpus: 100% category accuracy (enforced floor: 85%).
 - Silent-wrong rate: **zero, enforced by test** (`tests/smoke.html`).

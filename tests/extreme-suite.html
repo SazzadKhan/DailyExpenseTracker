@@ -76,7 +76,7 @@
 <body>
     <h1>195 extreme lines — before vs after</h1>
     <p class="sub">Three waves of limit-pushing inputs (amount-first run-ons, typos, Bengali script, Banglish,
-       income wording, date grammar, quantity traps, BD brands, voice transcripts) are parsed <b>live in
+       income wording, date grammar, quantity traps, BD brands, Bengali dictation transcripts) are parsed <b>live in
        your browser right now</b> by two real modules: the parser as shipped before this branch
        (<code>tests/parser-v2-baseline.js</code>, frozen copy of v2) and the current
        <code>js/features/assistant/parser.js</code> (v3). Each case is scored against a written gold
@@ -84,8 +84,8 @@
        Nothing on this page is hard-coded.<br><br>
        <b>Honest-measurement note:</b> wave 1 (#1–50) drove the v3 rewrite. Wave 2 (#51–150) was written
        <em>afterwards</em> and scored blind: v3 got <b>68/100</b> on first contact (v2: 40/100). Wave 3
-       (#151–195) is what bn-BD <em>voice</em> hands the parser — Bengali-script sentences and spoken
-       number words ("রিকশা ভাড়া পঞ্চাশ টাকা") — and scored <b>4/45</b> blind before the voice-vocabulary
+       (#151–195) is what bn-BD <em>dictation</em> hands the parser — Bengali-script sentences and spoken
+       number words ("রিকশা ভাড়া পঞ্চাশ টাকা") — and scored <b>4/45</b> blind before the Bengali-vocabulary
        fixes. In every blind run all misses failed safe as flagged ⚠ Other — zero silent-wrong. The AFTER
        column shows the current parser.</p>
 
@@ -103,14 +103,14 @@
         <button data-f="all" aria-pressed="true">All 195</button>
         <button data-f="wave1" aria-pressed="false">Wave 1 (#1–50)</button>
         <button data-f="wave2" aria-pressed="false">Wave 2, blind (#51–150)</button>
-        <button data-f="wave3" aria-pressed="false">Wave 3, voice (#151–195)</button>
+        <button data-f="wave3" aria-pressed="false">Wave 3, Bengali (#151–195)</button>
         <button data-f="fixed" aria-pressed="false">Fixed by v3</button>
         <button data-f="failing" aria-pressed="false">Still failing</button>
         <button data-f="both" aria-pressed="false">Passed in both</button>
     </div>
     <div id="cases"></div>
 
-    <footer>Gold data: <code>tests/extreme-cases-50.js</code> + <code>tests/extreme-cases-100.js</code> ·
+    <footer>Gold data: <code>tests/extreme-cases-50.js</code> + <code>tests/extreme-cases-100.js</code> + <code>tests/extreme-cases-bengali.js</code> ·
     scored with the shared <code>evaluate()</code> — the same function the headless harness uses.
     Regression guard: all parser assertions in <code>tests/smoke.html</code> still pass against v3.</footer>
 
@@ -119,11 +119,11 @@
         import { parse as parseAfter } from '../js/features/assistant/parser.js';
         import { CASES as CASES50, evaluate } from './extreme-cases-50.js';
         import { CASES100 } from './extreme-cases-100.js';
-        import { CASES_VOICE } from './extreme-cases-voice.js';
+        import { CASES_BENGALI } from './extreme-cases-bengali.js';
         import { DEFAULT_CATEGORIES } from '../js/core/constants.js';
         import { getLocalDateString } from '../js/core/format.js';
 
-        const CASES = [...CASES50, ...CASES100, ...CASES_VOICE];
+        const CASES = [...CASES50, ...CASES100, ...CASES_BENGALI];
 
         const today = getLocalDateString(new Date());
         const pctx = { categories: DEFAULT_CATEGORIES, todayStr: today, currencyCode: 'BDT' };

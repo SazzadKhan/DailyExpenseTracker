@@ -27,12 +27,9 @@ export const STORAGE_KEYS = Object.freeze({
     ASSISTANT_LICENSE_KEY: 'assistantLicenseKey',
     ASSISTANT_LOG: 'assistantLog',
     ASSISTANT_ONBOARDED: 'assistantOnboarded',
-    ASSISTANT_LEARNED: 'assistantLearned',
-    // Voice input (capture box). Consent is for the ONLINE Web Speech path —
-    // the browser ships audio to Google/Apple, so it must stay opt-in.
-    VOICE_LANG: 'voiceLang',
-    VOICE_CONSENT: 'voiceOnlineConsent',
-    VOICE_TIP_DISMISSED: 'voiceTipDismissed'
+    ASSISTANT_LEARNED: 'assistantLearned'
+    // (voiceLang / voiceOnlineConsent / voiceTipDismissed belonged to the
+    // removed voice-input feature; stale values in existing browsers are inert.)
 });
 
 /** Default settings applied for new users / when localStorage is empty. */
