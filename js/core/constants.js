@@ -27,7 +27,10 @@ export const STORAGE_KEYS = Object.freeze({
     ASSISTANT_LICENSE_KEY: 'assistantLicenseKey',
     ASSISTANT_LOG: 'assistantLog',
     ASSISTANT_ONBOARDED: 'assistantOnboarded',
-    ASSISTANT_LEARNED: 'assistantLearned'
+    ASSISTANT_LEARNED: 'assistantLearned',
+    // Per-provider config stash so switching vendors keeps each vendor's model
+    // and key. JSON map: { [providerId]: { model, apiKey, baseUrl } }.
+    ASSISTANT_PROVIDERS: 'assistantProviders'
     // (voiceLang / voiceOnlineConsent / voiceTipDismissed belonged to the
     // removed voice-input feature; stale values in existing browsers are inert.)
 });

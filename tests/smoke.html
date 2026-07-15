@@ -510,6 +510,25 @@
                 assertEq(entries[0].subcategory, 'Groceries');
                 assertEq(entries[2].subcategory, 'Internet');
             });
+            t('parser: bare quantity prefix is not a price ("2 jackfruit 200")', () => {
+                const { entries } = parse('auto rickshaw 330 2kg doi 540 5kg mango 700 2 jackfruit 200', pctx);
+                assertEq(entries.length, 4, 'no phantom entry from the trailing price');
+                assertEq(entries.map(e => e.amount), [330, 540, 700, 200]);
+                assertEq(entries[1].subcategory, 'Groceries'); // doi now in vocab
+                assertEq(entries[3].subcategory, 'Groceries'); // jackfruit now in vocab
+            });
+            t('parser: "5 mango 700" is one entry priced 700, not two', () => {
+                const { entries } = parse('5 mango 700', pctx);
+                assertEq(entries.length, 1);
+                assertEq(entries[0].amount, 700);
+                assertEq(entries[0].subcategory, 'Groceries');
+            });
+            t('parser: equal small back-to-back prices stay two entries', () => {
+                const { entries } = parse('5 banana 5 riksha', pctx);
+                assertEq(entries.length, 2);
+                assertEq(entries.map(e => e.amount), [5, 5]);
+                assertEq(entries[1].category, 'Transportation');
+            });
             t('parser: Bengali digits normalize', () => {
                 const { entries } = parse('৫০ rickshaw', pctx);
                 assertEq(entries.length, 1);
