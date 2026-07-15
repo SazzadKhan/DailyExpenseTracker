@@ -16,7 +16,7 @@ import { addSubcategory } from '../categories/actions.js';
 import { parse } from './parser.js';
 import { getLearnedLookup, recordOutcome, nextSuggestion, acceptSuggestion, dismissSuggestion } from './learned.js';
 import { extractWithLLM } from './engine-llm.js';
-import { DEFAULT_MODELS } from './providers.js';
+import { defaultModelFor } from './providers.js';
 import { startTrialIfNeeded, getEntitlement, activateLicense, TRIAL_DAYS } from './entitlement.js';
 import { logInteraction, markOutcome } from './audit-log.js';
 import { mountAssistantSettings, getAssistantConfig } from './settings.js';
@@ -192,11 +192,13 @@ async function handleSend() {
         const res = await extractWithLLM(text, {
             categories: s.categories,
             settings: s.settings,
-            config: { ...cfg, model: cfg.model || DEFAULT_MODELS[cfg.provider] }
+            config: { ...cfg, model: cfg.model || defaultModelFor(cfg.provider) }
         });
         typing.remove();
         if (!res.ok) {
-            addBubble('bot', el('p', { class: 'xbot-error' }, res.error));
+            addBubble('bot', el('p', { class: 'xbot-note' },
+                `⚠️ AI mode unavailable (${res.error}) — using the offline parser instead.`));
+            runOfflineParse(text, s);
             return;
         }
         const logId = logInteraction({ rawText: text, engine: 'llm', entries: res.entries });
@@ -207,23 +209,27 @@ async function handleSend() {
         }
         renderPreview(res.entries, [], logId, res.reply);
     } else {
-        const result = parse(text, {
-            categories: s.categories,
-            todayStr: getLocalDateString(new Date()),
-            currencyCode: s.settings?.currency,
-            learned: getLearnedLookup(s.categories)
-        });
-        const logId = logInteraction({ rawText: text, engine: 'parser', entries: result.entries });
-        if (!result.entries.length) {
-            addBubble('bot',
-                el('p', {}, 'I couldn’t find any amounts in that. Try something like:'),
-                el('p', {}, el('em', {}, 'lunch 150, rickshaw 40'))
-            );
-            markOutcome(logId, { cancelled: true });
-            return;
-        }
-        renderPreview(result.entries, result.unmatched, logId, '');
+        runOfflineParse(text, s);
     }
+}
+
+function runOfflineParse(text, s) {
+    const result = parse(text, {
+        categories: s.categories,
+        todayStr: getLocalDateString(new Date()),
+        currencyCode: s.settings?.currency,
+        learned: getLearnedLookup(s.categories)
+    });
+    const logId = logInteraction({ rawText: text, engine: 'parser', entries: result.entries });
+    if (!result.entries.length) {
+        addBubble('bot',
+            el('p', {}, 'I couldn’t find any amounts in that. Try something like:'),
+            el('p', {}, el('em', {}, 'lunch 150, rickshaw 40'))
+        );
+        markOutcome(logId, { cancelled: true });
+        return;
+    }
+    renderPreview(result.entries, result.unmatched, logId, '');
 }
 
 // ---- preview / confirm -----------------------------------------------------

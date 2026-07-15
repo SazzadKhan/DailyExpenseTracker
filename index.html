@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="css/components/effects.css">
     <link rel="stylesheet" href="css/components/assistant.css">
     <link rel="stylesheet" href="css/components/capture.css">
+    <link rel="stylesheet" href="css/components/guide.css">
     <link rel="stylesheet" href="css/components/vision-hero.css">
     <link rel="stylesheet" href="categories.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -188,7 +189,7 @@
                     <textarea id="capture-input" class="capture-input" rows="2"
                         placeholder="breakfast 120, rickshaw 50, gas bill 800 … got paid 20k"></textarea>
                     <div class="capture-actions">
-                        <span class="capture-hint">One line, comma-separated. I’ll log them and flag anything to check.</span>
+                        <span class="capture-hint">One line, comma-separated. I’ll log them and flag anything to check. <a href="#" id="capture-guide-link" class="capture-guide-link">See what I understand →</a></span>
                         <button type="button" id="capture-submit" class="capture-submit">Log it</button>
                     </div>
                     <div id="capture-receipt" class="capture-receipt" hidden></div>
@@ -503,19 +504,29 @@
                 <div class="settings-group">
                     <div class="form-group">
                         <label for="assistant-provider">AI provider</label>
-                        <select id="assistant-provider">
-                            <option value="anthropic">Anthropic (Claude)</option>
-                            <option value="openai">OpenAI</option>
-                        </select>
+                        <select id="assistant-provider"></select>
+                    </div>
+                    <div class="form-group" id="assistant-baseurl-group" style="display:none">
+                        <label for="assistant-base-url">API base URL</label>
+                        <input type="text" id="assistant-base-url" placeholder="https://…/v1" autocomplete="off">
+                        <small>OpenAI-compatible endpoint root (no trailing /chat/completions).</small>
                     </div>
                     <div class="form-group">
                         <label for="assistant-model">Model</label>
-                        <input type="text" id="assistant-model" placeholder="claude-opus-4-8" autocomplete="off">
+                        <div class="assistant-model-field">
+                            <input type="text" id="assistant-model" placeholder="claude-haiku-4-5" autocomplete="off">
+                            <ul class="assistant-model-menu" id="assistant-model-menu" hidden></ul>
+                        </div>
+                        <small>Pick from the dropdown after checking your connection below, or type any model id.</small>
                     </div>
                     <div class="form-group">
                         <label for="assistant-api-key">API key</label>
                         <input type="password" id="assistant-api-key" placeholder="Paste your API key" autocomplete="off">
-                        <small>Key stays in this browser — never synced to your Sheet. Leave empty to use the free offline parser.</small>
+                        <small>Key stays in this browser — never synced to your Sheet. Leave empty to use the free offline parser. <a href="#" id="assistant-key-help" target="_blank" rel="noopener" hidden>Get a key ↗</a></small>
+                    </div>
+                    <div class="form-group">
+                        <button type="button" class="btn-cancel" id="assistant-check-btn">🔌 Check connection &amp; list models</button>
+                        <small>Verifies your key and fills the Model dropdown with what your account can actually access.</small>
                     </div>
                     <button class="btn-save" id="assistant-save-btn">💾 Save Assistant Settings</button>
                 </div>
@@ -551,6 +562,9 @@
                     </div>
                 </section>
             </div>
+
+            <!-- Assistant Guide Page (rendered by js/features/guide/index.js) -->
+            <div class="nav-page" data-page="guide"></div>
 
             <!-- Profile Page -->
             <div class="nav-page" data-page="profile">
@@ -847,6 +861,10 @@
         <button class="nav-item" data-page="categories">
             <span class="nav-icon">📁</span>
             <span class="nav-label">Categories</span>
+        </button>
+        <button class="nav-item" data-page="guide">
+            <span class="nav-icon">📖</span>
+            <span class="nav-label">Guide</span>
         </button>
         <button class="nav-item" data-page="settings">
             <span class="nav-icon">⚙️</span>
