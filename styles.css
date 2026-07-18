@@ -2512,6 +2512,10 @@ html:has(.modal.active) body {
 
 /* ===== Landing / first-run overlay ===== */
 body.landing-open { overflow: hidden; }
+/* App chrome must not leak over the sign-in overlay: the nav shares its
+   z-index (1000, later in DOM wins) and the chatbot FAB sits at 1100. */
+body.landing-open .bottom-nav,
+body.landing-open #xpensebot-fab { display: none; }
 
 .landing-overlay {
     position: fixed;
