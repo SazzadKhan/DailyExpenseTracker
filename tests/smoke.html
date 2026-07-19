@@ -40,6 +40,10 @@
         import { EVENTS } from '../js/core/events.js';
         import { sameExpense, resolveConflictQueue } from '../js/features/sync/sync.model.js';
         import { parse } from '../js/features/assistant/parser.js';
+        import {
+            emptyLearned, recordOutcomeIn, buildLearnedLookup, findSuggestion,
+            acceptSuggestionIn, dismissSuggestionIn, applyDecay
+        } from '../js/features/assistant/learned.js';
         import { DEFAULT_CATEGORIES } from '../js/core/constants.js';
 
         const results = [];
@@ -639,6 +643,113 @@
                 assertEq(silentWrong, [], 'silent wrong classifications');
                 const rate = catOk / CORPUS.length;
                 assert(rate >= 0.85, `category accuracy ${(rate * 100).toFixed(0)}% is below the 85% floor`);
+            });
+
+            // ---- learned index (personal knowledge layer) ---------------------
+            const acceptedEntry = (category, subcategory, description) =>
+                ({ category, subcategory, description, confidence: 'high' });
+            const fallbackEntry = (description) =>
+                ({ category: 'Other', subcategory: 'Other', description, confidence: 'low' });
+
+            t('learned: one accept is not knowledge yet, two is', () => {
+                const data = emptyLearned(today);
+                recordOutcomeIn(data, [acceptedEntry('Food & Dining', 'Delivery', 'burger')], today);
+                assertEq(buildLearnedLookup(data, DEFAULT_CATEGORIES).size, 0);
+                recordOutcomeIn(data, [acceptedEntry('Food & Dining', 'Delivery', 'burger')], today);
+                const hit = buildLearnedLookup(data, DEFAULT_CATEGORIES).get('burger');
+                assertEq(hit.category, 'Food & Dining');
+                assertEq(hit.subcategory, 'Delivery');
+            });
+            t('learned: user history beats the synonym pack', () => {
+                const data = emptyLearned(today);
+                for (let i = 0; i < 2; i++) {
+                    recordOutcomeIn(data, [acceptedEntry('Food & Dining', 'Delivery', 'burger')], today);
+                }
+                const learned = buildLearnedLookup(data, DEFAULT_CATEGORIES);
+                const e = parse('burger 450', { ...pctx, learned }).entries[0];
+                assertEq(e.subcategory, 'Delivery', 'pack says Fast Food; history says Delivery');
+                assertEq(e.needsReview, false);
+            });
+            t('learned: taxonomy names still beat learned mappings', () => {
+                const data = emptyLearned(today);
+                for (let i = 0; i < 2; i++) {
+                    recordOutcomeIn(data, [acceptedEntry('Entertainment', 'Movies', 'coffee')], today);
+                }
+                const learned = buildLearnedLookup(data, DEFAULT_CATEGORIES);
+                const e = parse('coffee 100', { ...pctx, learned }).entries[0];
+                assertEq(e.subcategory, 'Coffee & Snacks', 'subcategory name match wins');
+            });
+            t('learned: income mapping still requires income intent', () => {
+                const data = emptyLearned(today);
+                for (let i = 0; i < 2; i++) {
+                    recordOutcomeIn(data, [acceptedEntry('Income', 'Salary', 'gigmoney')], today);
+                }
+                const learned = buildLearnedLookup(data, DEFAULT_CATEGORIES);
+                const noIntent = parse('gigmoney 5000', { ...pctx, learned }).entries[0];
+                assertEq(noIntent.category, 'Other');
+                assertEq(noIntent.needsReview, true);
+                const withIntent = parse('received gigmoney 5000', { ...pctx, learned }).entries[0];
+                assertEq(withIntent.category, 'Income');
+                assertEq(withIntent.subcategory, 'Salary');
+            });
+            t('learned: deleted sub degrades to category-only; deleted category drops', () => {
+                const data = emptyLearned(today);
+                for (let i = 0; i < 2; i++) {
+                    recordOutcomeIn(data, [acceptedEntry('Healthcare', 'Medicine', 'gigmed')], today);
+                }
+                const noSub = { ...DEFAULT_CATEGORIES, Healthcare: { ...DEFAULT_CATEGORIES.Healthcare, subcategories: ['Other'] } };
+                assertEq(buildLearnedLookup(data, noSub).get('gigmed').subcategory, null);
+                const noCat = { ...DEFAULT_CATEGORIES };
+                delete noCat.Healthcare;
+                assertEq(buildLearnedLookup(data, noCat).get('gigmed'), undefined);
+            });
+            t('learned: fallback entries train suggestions, not classifications', () => {
+                const data = emptyLearned(today);
+                for (let i = 0; i < 3; i++) recordOutcomeIn(data, [fallbackEntry('zzqx')], today);
+                assertEq(Object.keys(data.words), []);
+                assertEq(buildLearnedLookup(data, DEFAULT_CATEGORIES).size, 0);
+            });
+            t('learned: same-day repeats count once toward a suggestion', () => {
+                const data = emptyLearned(today);
+                for (let i = 0; i < 3; i++) recordOutcomeIn(data, [fallbackEntry('zzqx')], today);
+                assertEq(findSuggestion(data, DEFAULT_CATEGORIES, today), null);
+            });
+            t('learned: 3 miss days → suggestion → accept → auto-files next time', () => {
+                const data = emptyLearned(today);
+                for (const d of [dayShift(2), dayShift(1), today]) {
+                    const { entries } = parse('zzqx 75', pctx);
+                    recordOutcomeIn(data, entries, d);
+                }
+                const sug = findSuggestion(data, DEFAULT_CATEGORIES, today);
+                assertEq(sug.word, 'zzqx');
+                assertEq(sug.label, 'Zzqx');
+                assertEq(sug.category, 'Other');
+                // accepting creates the subcategory and seeds the mapping
+                const cats = { ...DEFAULT_CATEGORIES, Other: { ...DEFAULT_CATEGORIES.Other, subcategories: [...DEFAULT_CATEGORIES.Other.subcategories, 'Zzqx'] } };
+                acceptSuggestionIn(data, 'zzqx', 'Other', 'Zzqx');
+                const e = parse('zzqx 75', { ...pctx, categories: cats, learned: buildLearnedLookup(data, cats) }).entries[0];
+                assertEq(e.subcategory, 'Zzqx');
+                assertEq(e.needsReview, false);
+                assertEq(findSuggestion(data, cats, today), null, 'suggestion retired after accept');
+            });
+            t('learned: dismissed suggestion never returns', () => {
+                const data = emptyLearned(today);
+                for (const d of [dayShift(2), dayShift(1), today]) {
+                    recordOutcomeIn(data, [fallbackEntry('zzqx')], d);
+                }
+                assert(findSuggestion(data, DEFAULT_CATEGORIES, today) !== null);
+                dismissSuggestionIn(data, 'zzqx');
+                assertEq(findSuggestion(data, DEFAULT_CATEGORIES, today), null);
+                recordOutcomeIn(data, [fallbackEntry('zzqx')], today);
+                assertEq(findSuggestion(data, DEFAULT_CATEGORIES, today), null, 'dismissal survives new misses');
+            });
+            t('learned: counts halve after 30 days, dead mappings pruned', () => {
+                const data = emptyLearned(dayShift(31));
+                data.words = { foo: { 'Food & Dining›Other': 4, 'Shopping›Other': 1 } };
+                applyDecay(data, today);
+                assertEq(data.words.foo['Food & Dining›Other'], 2);
+                assertEq('Shopping›Other' in data.words.foo, false);
+                assertEq(data.decayedAt, today);
             });
 
             renderResults();

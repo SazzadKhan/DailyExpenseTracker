@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>195 extreme lines — parser v2 vs v3, live</title>
+    <style>
+        :root {
+            --surface: #0f172a;
+            --card: #16213b;
+            --chip: #1e293b;
+            --ink: #f8fafc;
+            --ink-2: #94a3b8;
+            --ink-muted: #64748b;
+            --grid: #1e293b;
+            --axis: #334155;
+            --before: #3987e5;  /* series: v2 as shipped */
+            --after: #199e70;   /* series: v3 this branch */
+            --good: #10b981;
+            --bad: #ef4444;
+            --warn: #fbbf24;
+        }
+        * { box-sizing: border-box; }
+        body { font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 24px; background: var(--surface); color: var(--ink); max-width: 1080px; margin: 0 auto; }
+        h1 { margin: 0 0 4px; font-size: 22px; }
+        h2 { font-size: 15px; margin: 28px 0 10px; }
+        .sub { color: var(--ink-2); margin: 0 0 18px; }
+        .tiles { display: flex; gap: 12px; flex-wrap: wrap; margin: 18px 0; }
+        .tile { flex: 1 1 170px; background: var(--card); border: 1px solid var(--grid); border-radius: 10px; padding: 14px 16px; }
+        .tile .val { font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; }
+        .tile .lbl { color: var(--ink-2); font-size: 12.5px; margin-top: 2px; }
+        .tile .delta { font-size: 13px; margin-top: 4px; color: var(--good); font-weight: 600; }
+        .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: baseline; }
+        .legend { display: flex; gap: 18px; margin: 6px 0 10px; font-size: 13px; color: var(--ink-2); }
+        .groups { background: var(--card); border: 1px solid var(--grid); border-radius: 10px; padding: 12px 16px; overflow-x: auto; }
+        .groups table { border-collapse: collapse; width: 100%; min-width: 520px; }
+        .groups td, .groups th { padding: 5px 10px 5px 0; font-size: 13px; text-align: left; border: 0; }
+        .groups th { color: var(--ink-2); font-weight: 500; }
+        .bar { height: 9px; border-radius: 0 4px 4px 0; min-width: 2px; }
+        .bar.before { background: var(--before); }
+        .bar.after { background: var(--after); margin-top: 2px; }
+        .bar-cell { width: 45%; }
+        .num { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
+        .filters { display: flex; gap: 8px; margin: 18px 0 6px; flex-wrap: wrap; }
+        .filters button { background: var(--chip); color: var(--ink-2); border: 1px solid var(--axis); border-radius: 999px; padding: 5px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+        .filters button[aria-pressed="true"] { background: var(--axis); color: var(--ink); }
+        .case { border: 1px solid var(--grid); border-radius: 10px; padding: 14px 16px; margin: 12px 0; background: var(--card); }
+        .case h3 { margin: 0 0 6px; font-size: 14.5px; }
+        .case .id { color: var(--ink-muted); }
+        .line { display: inline-block; background: var(--chip); padding: 4px 10px; border-radius: 6px; font-family: ui-monospace, Menlo, monospace; font-size: 13px; margin: 4px 0 6px; word-break: break-word; }
+        .note, .gold { color: var(--ink-2); font-size: 13px; margin: 4px 0; }
+        .gold b { color: var(--ink); font-weight: 600; }
+        .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+        @media (max-width: 760px) { .duo { grid-template-columns: 1fr; } }
+        .col { border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px; background: var(--surface); overflow-x: auto; }
+        .col-head { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; margin-bottom: 6px; }
+        .col-head .who { font-weight: 600; }
+        .who.before { color: var(--before); }
+        .who.after { color: var(--after); }
+        .badge { font-size: 11.5px; font-weight: 700; letter-spacing: .4px; border-radius: 5px; padding: 2px 8px; }
+        .badge.pass { color: var(--good); border: 1px solid var(--good); }
+        .badge.fail { color: var(--bad); border: 1px solid var(--bad); }
+        table.entries { border-collapse: collapse; width: 100%; }
+        .entries th, .entries td { text-align: left; padding: 3px 10px 3px 0; border-bottom: 1px solid var(--grid); font-family: ui-monospace, Menlo, monospace; font-size: 12px; white-space: nowrap; }
+        .entries tr:last-child td { border-bottom: 0; }
+        .entries td:last-child { white-space: normal; min-width: 90px; }
+        .entries th { color: var(--ink-muted); font-weight: 500; }
+        .flag { color: var(--warn); }
+        .ok { color: var(--good); }
+        .problems { margin: 6px 0 0; padding-left: 18px; color: var(--bad); font-size: 12.5px; }
+        .unmatched { color: var(--warn); font-size: 12.5px; margin: 6px 0 0; }
+        .empty { color: var(--ink-muted); font-size: 12.5px; }
+        footer { color: var(--ink-muted); font-size: 12.5px; margin: 26px 0 6px; }
+    </style>
+</head>
+<body>
+    <h1>195 extreme lines — before vs after</h1>
+    <p class="sub">Three waves of limit-pushing inputs (amount-first run-ons, typos, Bengali script, Banglish,
+       income wording, date grammar, quantity traps, BD brands, Bengali dictation transcripts) are parsed <b>live in
+       your browser right now</b> by two real modules: the parser as shipped before this branch
+       (<code>tests/parser-v2-baseline.js</code>, frozen copy of v2) and the current
+       <code>js/features/assistant/parser.js</code> (v3). Each case is scored against a written gold
+       expectation — entry count, amounts, categories, and any pinned subcategory, date, or review flag.
+       Nothing on this page is hard-coded.<br><br>
+       <b>Honest-measurement note:</b> wave 1 (#1–50) drove the v3 rewrite. Wave 2 (#51–150) was written
+       <em>afterwards</em> and scored blind: v3 got <b>68/100</b> on first contact (v2: 40/100). Wave 3
+       (#151–195) is what bn-BD <em>dictation</em> hands the parser — Bengali-script sentences and spoken
+       number words ("রিকশা ভাড়া পঞ্চাশ টাকা") — and scored <b>4/45</b> blind before the Bengali-vocabulary
+       fixes. In every blind run all misses failed safe as flagged ⚠ Other — zero silent-wrong. The AFTER
+       column shows the current parser.</p>
+
+    <div class="tiles" id="tiles"></div>
+
+    <h2>Accuracy by stress group</h2>
+    <div class="legend">
+        <span><span class="dot" style="background:var(--before)"></span>before — v2 as shipped</span>
+        <span><span class="dot" style="background:var(--after)"></span>after — v3, this branch</span>
+    </div>
+    <div class="groups"><table id="groups"></table></div>
+
+    <h2>Every case, side by side</h2>
+    <div class="filters" id="filters" role="group" aria-label="filter cases">
+        <button data-f="all" aria-pressed="true">All 195</button>
+        <button data-f="wave1" aria-pressed="false">Wave 1 (#1–50)</button>
+        <button data-f="wave2" aria-pressed="false">Wave 2, blind (#51–150)</button>
+        <button data-f="wave3" aria-pressed="false">Wave 3, Bengali (#151–195)</button>
+        <button data-f="fixed" aria-pressed="false">Fixed by v3</button>
+        <button data-f="failing" aria-pressed="false">Still failing</button>
+        <button data-f="both" aria-pressed="false">Passed in both</button>
+    </div>
+    <div id="cases"></div>
+
+    <footer>Gold data: <code>tests/extreme-cases-50.js</code> + <code>tests/extreme-cases-100.js</code> + <code>tests/extreme-cases-bengali.js</code> ·
+    scored with the shared <code>evaluate()</code> — the same function the headless harness uses.
+    Regression guard: all parser assertions in <code>tests/smoke.html</code> still pass against v3.</footer>
+
+    <script type="module">
+        import { parse as parseBefore } from './parser-v2-baseline.js';
+        import { parse as parseAfter } from '../js/features/assistant/parser.js';
+        import { CASES as CASES50, evaluate } from './extreme-cases-50.js';
+        import { CASES100 } from './extreme-cases-100.js';
+        import { CASES_BENGALI } from './extreme-cases-bengali.js';
+        import { DEFAULT_CATEGORIES } from '../js/core/constants.js';
+        import { getLocalDateString } from '../js/core/format.js';
+
+        const CASES = [...CASES50, ...CASES100, ...CASES_BENGALI];
+
+        const today = getLocalDateString(new Date());
+        const pctx = { categories: DEFAULT_CATEGORIES, todayStr: today, currencyCode: 'BDT' };
+
+        const safeParse = (fn, input) => {
+            try { return fn(input, pctx); }
+            catch (err) { return { entries: [], unmatched: [], threw: String(err && err.message || err) }; }
+        };
+
+        const rows = CASES.map(c => {
+            const before = safeParse(parseBefore, c.input);
+            const after = safeParse(parseAfter, c.input);
+            return {
+                c, before, after,
+                evBefore: evaluate(c, before, today),
+                evAfter: evaluate(c, after, today)
+            };
+        });
+
+        // ---- tiles ---------------------------------------------------------
+        const nBefore = rows.filter(r => r.evBefore.pass).length;
+        const nAfter = rows.filter(r => r.evAfter.pass).length;
+        const fixed = rows.filter(r => !r.evBefore.pass && r.evAfter.pass).length;
+        const regressed = rows.filter(r => r.evBefore.pass && !r.evAfter.pass).length;
+        const pct = n => Math.round(n / rows.length * 100) + '%';
+
+        const el = (tag, cls, text) => {
+            const n = document.createElement(tag);
+            if (cls) n.className = cls;
+            if (text != null) n.textContent = text;
+            return n;
+        };
+        const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+        const tiles = document.getElementById('tiles');
+        const tile = (val, lbl, extra, color) => {
+            const t = el('div', 'tile');
+            const v = el('div', 'val', val);
+            if (color) v.style.color = color;
+            t.append(v, el('div', 'lbl', lbl));
+            if (extra) t.append(Object.assign(el('div', 'delta', extra.text), { style: `color:${extra.color}` }));
+            return t;
+        };
+        tiles.append(
+            tile(`${nBefore}/${rows.length}`, `before — ${pct(nBefore)} of gold cases exact`, null, 'var(--before)'),
+            tile(`${nAfter}/${rows.length}`, `after — ${pct(nAfter)} of gold cases exact`, null, 'var(--after)'),
+            tile(`+${fixed}`, 'cases fixed by v3', null, null),
+            tile(String(regressed), 'regressions (v2 pass → v3 fail)', null, regressed ? 'var(--bad)' : null)
+        );
+
+        // ---- per-group bars --------------------------------------------------
+        const groups = [...new Set(CASES.map(c => c.group))];
+        const gt = document.getElementById('groups');
+        gt.innerHTML = '<tr><th>group</th><th class="bar-cell"></th><th>before</th><th>after</th></tr>';
+        for (const g of groups) {
+            const inG = rows.filter(r => r.c.group === g);
+            const b = inG.filter(r => r.evBefore.pass).length;
+            const a = inG.filter(r => r.evAfter.pass).length;
+            const tr = document.createElement('tr');
+            const w = n => Math.max(2, Math.round(n / inG.length * 100));
+            tr.innerHTML =
+                `<td>${esc(g)}</td>` +
+                `<td class="bar-cell"><div class="bar before" style="width:${w(b)}%" title="before: ${b}/${inG.length}"></div>` +
+                `<div class="bar after" style="width:${w(a)}%" title="after: ${a}/${inG.length}"></div></td>` +
+                `<td class="num">${b}/${inG.length}</td><td class="num">${a}/${inG.length}</td>`;
+            gt.append(tr);
+        }
+
+        // ---- case cards ------------------------------------------------------
+        function entryTable(result) {
+            const frag = document.createDocumentFragment();
+            if (result.threw) {
+                frag.append(el('p', 'problems', 'parser threw: ' + result.threw));
+                return frag;
+            }
+            if (result.entries.length) {
+                const t = document.createElement('table');
+                t.className = 'entries';
+                t.innerHTML = '<tr><th>date</th><th>category › sub</th><th>amount</th><th>conf</th><th>review</th><th>description</th></tr>';
+                for (const e of result.entries) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML =
+                        `<td>${e.date}</td><td>${esc(e.category)} › ${esc(e.subcategory)}</td>` +
+                        `<td>${e.amount}</td><td>${e.confidence}</td>` +
+                        `<td>${e.needsReview ? '<span class="flag">⚠ yes</span>' : '<span class="ok">no</span>'}</td>` +
+                        `<td>${esc(e.description)}</td>`;
+                    t.append(tr);
+                }
+                frag.append(t);
+            } else {
+                frag.append(el('p', 'empty', '(no entries)'));
+            }
+            if (result.unmatched?.length) {
+                frag.append(el('p', 'unmatched', 'unmatched: ' + result.unmatched.join(' · ')));
+            }
+            return frag;
+        }
+
+        function goldLabel(c) {
+            const bits = c.expect.map(g => {
+                let s = `${g.amount} → ${g.category}${g.sub ? ' › ' + g.sub : ''}`;
+                if (g.review === true) s += ' ⚠';
+                if (g.daysAgo != null) s += ` (${g.daysAgo} day${g.daysAgo === 1 ? '' : 's'} ago)`;
+                if (g.date) s += ` (${g.date})`;
+                if (g.prevMonth) s += ' (last month)';
+                if (g.lastWeekday != null) {
+                    s += ` (last ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][g.lastWeekday]})`;
+                }
+                return `<b>${esc(s)}</b>`;
+            });
+            return `${c.expect.length} entr${c.expect.length === 1 ? 'y' : 'ies'}: ${bits.join(' · ')}`;
+        }
+
+        function column(who, cls, result, ev) {
+            const col = el('div', 'col');
+            const head = el('div', 'col-head');
+            head.append(el('span', `who ${cls}`, who),
+                el('span', `badge ${ev.pass ? 'pass' : 'fail'}`, ev.pass ? 'PASS' : 'FAIL'));
+            col.append(head, entryTable(result));
+            if (!ev.pass && ev.problems.length) {
+                const ul = el('ul', 'problems');
+                for (const p of ev.problems) ul.append(el('li', null, p));
+                col.append(ul);
+            }
+            return col;
+        }
+
+        const casesRoot = document.getElementById('cases');
+        for (const r of rows) {
+            const card = el('div', 'case');
+            card.dataset.fixed = String(!r.evBefore.pass && r.evAfter.pass);
+            card.dataset.failing = String(!r.evAfter.pass);
+            card.dataset.both = String(r.evBefore.pass && r.evAfter.pass);
+            card.dataset.wave1 = String(r.c.id <= 50);
+            card.dataset.wave2 = String(r.c.id > 50 && r.c.id <= 150);
+            card.dataset.wave3 = String(r.c.id > 150);
+            const h = el('h3');
+            h.append(el('span', 'id', `#${r.c.id} `), document.createTextNode(r.c.group));
+            card.append(h, el('code', 'line', r.c.input), el('p', 'note', r.c.note));
+            const gold = el('p', 'gold');
+            gold.innerHTML = 'expected — ' + goldLabel(r.c);
+            card.append(gold);
+            const duo = el('div', 'duo');
+            duo.append(
+                column('BEFORE · v2 as shipped', 'before', r.before, r.evBefore),
+                column('AFTER · v3 this branch', 'after', r.after, r.evAfter)
+            );
+            card.append(duo);
+            casesRoot.append(card);
+        }
+
+        // ---- filter row ------------------------------------------------------
+        document.getElementById('filters').addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-f]');
+            if (!btn) return;
+            for (const b of document.querySelectorAll('#filters button')) {
+                b.setAttribute('aria-pressed', String(b === btn));
+            }
+            const f = btn.dataset.f;
+            for (const card of casesRoot.children) {
+                card.style.display = (f === 'all' || card.dataset[f] === 'true') ? '' : 'none';
+            }
+        });
+    </script>
+</body>
+</html>
