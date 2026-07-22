@@ -1,14 +1,16 @@
 // js/services/sheets-api.js
 // Google Sheets API client.
 // Wraps fetch calls to Sheets v4 + Drive v3 to read/write the user's expense
-// spreadsheet. Uses the access token from window.auth.
+// spreadsheet. Uses the access token from services/auth.js.
 //
 // Schema:
 //   Sheet "Expenses": header row [id, date, category, subcategory, amount,
 //                                 description, currency, timestamp, type]
 //   Sheet "Meta":     A=key, B=value(JSON). Rows: settings, categories.
 //
-// Also exposed on `window.sheetsApi` for any legacy callers.
+// Also mirrored on `window.sheetsApi` for DevTools debugging only.
+
+import { auth } from './auth.js';
 
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
@@ -26,7 +28,7 @@ function _sheetIdKey(email) {
 }
 
 async function _fetchJson(url, opts = {}) {
-    const token = window.auth && window.auth.getAccessToken();
+    const token = auth.getAccessToken();
     if (!token) throw new Error('Not signed in');
     const res = await fetch(url, {
         ...opts,
@@ -79,7 +81,7 @@ const sheetsApi = {
     },
 
     async findOrCreateSpreadsheet() {
-        const profile = window.auth && window.auth.getProfile();
+        const profile = auth.getProfile();
         const email = profile ? profile.email : null;
         const cachedKey = _sheetIdKey(email);
 

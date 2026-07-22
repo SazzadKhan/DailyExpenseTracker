@@ -10,13 +10,13 @@ npx --yes http-server . -p 8000 -c-1
 # then open http://127.0.0.1:8000
 ```
 
-- Smoke tests: open `tests/smoke.html` in the browser (manual: `tests/manual-smoke.html`).
+- Smoke tests (headless, use this to verify changes): `node tests/run-smoke.mjs` — exits 0/1; installs Playwright to a temp cache outside the repo on first run. Browser versions: open `tests/smoke.html` (manual checklist: `tests/manual-smoke.html`).
 - Deploy: GitHub Pages serves the repo root; branch `GitHub_Pages_Google_Sheets` is production — never commit to it directly.
 
 ## Working style (token-efficient)
 
 - Search `js/features/<area>/` first; each feature is self-contained. Do not read the whole `js/` tree to find something.
-- Don't read `docs/BUSINESS_PLAN*.md`, `docs/PITCHES.md`, or `docs/STRATEGY_NOTES_*.md` unless the task is explicitly about business docs — they are large and irrelevant to code work.
+- In `docs/`, only `REFACTOR_ROADMAP.md`, `TIMEZONE_BUG.md`, `OAUTH_SETUP.md`, and `PARSER_LIMITATIONS.md` are code-relevant. Don't read anything else there (business plans, pitches, strategy notes, feature/plan write-ups) unless the task is explicitly about those docs — they are large and irrelevant to code work.
 - Chart.js comes from a CDN `<script>` in `index.html`; there is no `package.json` and there must never be a build step or npm dependency.
 - Commit messages follow Conventional Commits (`feat:`, `fix:`, `refactor:`, scope optional), matching `git log`.
 - Prefer the smallest possible diff. No drive-by refactors.

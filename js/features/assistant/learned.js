@@ -250,3 +250,56 @@ export function acceptSuggestion(word, category, subcategory) {
 export function dismissSuggestion(word) {
     saveLearned(dismissSuggestionIn(loadLearned(), word));
 }
+
+/**
+ * Read-only snapshot of the learned state for the Assistant Guide dashboard.
+ * `trusted` are word→category mappings the parser already applies (≥ MIN_LEARN_COUNT
+ * accepts); `learning` are seen-once mappings not yet trusted; `misses` are words
+ * that keep landing in a fallback category and could become a subcategory (all
+ * still-relevant ones, not just the single best that findSuggestion returns).
+ * @returns {{ trusted: Array<{word:string,category:string,subcategory:string|null,count:number}>,
+ *             learning: Array<{word:string,category:string,subcategory:string|null,count:number}>,
+ *             misses: Array<{word:string,label:string,category:string,count:number,ready:boolean}>,
+ *             dismissedCount:number }}
+ */
+export function learnedSummary(categories) {
+    const data = loadLearned();
+    const todayStr = getLocalDateString(new Date());
+    const trusted = [];
+    const learning = [];
+    for (const [word, targets] of Object.entries(data.words || {})) {
+        let best = null, bestCount = 0;
+        for (const [target, count] of Object.entries(targets)) {
+            if (count > bestCount) { best = target; bestCount = count; }
+        }
+        if (!best) continue;
+        const sep = best.indexOf('›');
+        const category = best.slice(0, sep);
+        let subcategory = best.slice(sep + 1) || null;
+        if (!categories?.[category]) continue;
+        if (subcategory && !subcategoriesOf(categories, category).includes(subcategory)) {
+            subcategory = null;
+        }
+        (bestCount >= MIN_LEARN_COUNT ? trusted : learning)
+            .push({ word, category, subcategory, count: bestCount });
+    }
+    trusted.sort((a, b) => b.count - a.count);
+    learning.sort((a, b) => b.count - a.count);
+
+    const misses = [];
+    for (const [word, miss] of Object.entries(data.misses || {})) {
+        if (data.dismissed?.[word]) continue;
+        if (!categories?.[miss.category]) continue;
+        const recent = miss.dates.filter(d => {
+            const diff = dayDiff(d, todayStr);
+            return diff >= 0 && diff <= SUGGEST_WINDOW_DAYS;
+        }).length;
+        if (recent < 1) continue;
+        const label = titleCase(word);
+        if (subcategoriesOf(categories, miss.category).includes(label)) continue;
+        misses.push({ word, label, category: miss.category, count: recent, ready: recent >= SUGGEST_MIN });
+    }
+    misses.sort((a, b) => b.count - a.count);
+
+    return { trusted, learning, misses, dismissedCount: Object.keys(data.dismissed || {}).length };
+}

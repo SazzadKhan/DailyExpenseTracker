@@ -78,3 +78,22 @@ export function getLog() {
 export function exportLog() {
     return JSON.stringify(readLog(), null, 2);
 }
+
+/**
+ * Rolled-up counts for the Assistant Guide dashboard (from the local ring
+ * buffer, so it reflects only recent activity — CAP interactions).
+ * @returns {{ interactions:number, entriesParsed:number, entriesAccepted:number,
+ *             flagged:number, cancelled:number }}
+ */
+export function logStats() {
+    const log = readLog();
+    let entriesParsed = 0, entriesAccepted = 0, flagged = 0, cancelled = 0;
+    for (const rec of log) {
+        const parsed = rec.parsed || [];
+        entriesParsed += parsed.length;
+        entriesAccepted += (rec.accepted_ids || []).length;
+        if (rec.cancelled) cancelled++;
+        for (const e of parsed) if (e && e.needsReview) flagged++;
+    }
+    return { interactions: log.length, entriesParsed, entriesAccepted, flagged, cancelled };
+}

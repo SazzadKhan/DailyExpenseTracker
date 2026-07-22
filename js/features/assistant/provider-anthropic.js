@@ -5,6 +5,7 @@
 // user's own and never leaves their machine except to api.anthropic.com.
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
+const MODELS_URL = 'https://api.anthropic.com/v1/models';
 
 /**
  * @param {{ apiKey:string, model:string, system:string, userText:string, schema?:object }} opts
@@ -44,6 +45,33 @@ export async function sendAnthropic({ apiKey, model, system, userText, schema })
     const block = (data.content || []).find(b => b.type === 'text');
     if (!block || !block.text) return { ok: false, error: 'The model returned no text.' };
     return { ok: true, text: block.text };
+}
+
+/**
+ * Lists models the account can access — also doubles as a connection/key check.
+ * @param {{ apiKey:string }} opts
+ * @returns {Promise<{ ok:true, models:{id:string,label:string}[] } | { ok:false, error:string }>}
+ */
+export async function listAnthropicModels({ apiKey }) {
+    let resp;
+    try {
+        resp = await fetch(MODELS_URL, {
+            headers: {
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            }
+        });
+    } catch (_) {
+        return { ok: false, error: 'Network error — check your connection.' };
+    }
+    if (!resp.ok) return { ok: false, error: await errorMessage(resp) };
+
+    const data = await resp.json();
+    const list = Array.isArray(data?.data) ? data.data : [];
+    if (!list.length) return { ok: false, error: 'Connected, but no models were returned for this account.' };
+    const models = list.map(m => ({ id: m.id, label: m.display_name || m.id }));
+    return { ok: true, models };
 }
 
 function post(apiKey, body) {

@@ -1,15 +1,11 @@
 /* css/tokens.css
    Design tokens (CSS custom properties) and theme variants.
-   Loaded BEFORE styles.css. Edit theme colors here, not in styles.css.
+   Loaded FIRST, before every other stylesheet. Edit theme colors here only.
 
    To add a theme:
      1. Add a `[data-theme="<name>"] { ... }` block below.
      2. Add the name to THEMES in js/core/constants.js.
      3. Add an <option> to #theme-select in index.html.
-
-   These rules currently coexist with the same blocks at the top of
-   styles.css (identical values). The styles.css copy will be deleted
-   in a later cleanup pass once Phase 5 component extraction lands.
 */
 
 :root {

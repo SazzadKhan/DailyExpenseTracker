@@ -4,10 +4,12 @@
 
 import { store } from './core/store.js';
 import { loadAll } from './services/local-store.js';
-import './services/auth.js';      // sets window.auth (sanctioned global)
-import './services/sheets-api.js'; // sets window.sheetsApi (sanctioned global)
-import './services/storage.js';   // sets window.storage (sanctioned global)
-import './services/dialog.js';    // sets window.dialog (sanctioned global)
+// Services are imported directly by their consumers; these side-effect
+// imports only guarantee the window.* debug mirrors exist for DevTools.
+import './services/auth.js';
+import './services/sheets-api.js';
+import './services/storage.js';
+import './services/dialog.js';
 import { log } from './core/log.js';
 import { mount as mountExpenses } from './features/expenses/index.js';
 import { mount as mountAddModal } from './features/expenses/add-modal.js';
@@ -26,6 +28,7 @@ import { mount as mountNavigation } from './features/navigation/index.js';
 import { mount as mountEffects } from './features/effects/index.js';
 import { mount as mountAssistant } from './features/assistant/index.js';
 import { mount as mountCapture } from './features/capture/index.js';
+import { mount as mountGuide } from './features/guide/index.js';
 
 const $log = log('main');
 
@@ -63,6 +66,7 @@ function boot() {
     mountEffects();
     mountAssistant();
     mountCapture();
+    mountGuide();
     $log.info('booted; modular features mounted');
 }
 
