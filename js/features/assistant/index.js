@@ -11,13 +11,12 @@ import { $, $$, on, delegate, el, setVisible } from '../../core/dom.js';
 import { store } from '../../core/store.js';
 import { STORAGE_KEYS } from '../../core/constants.js';
 import { getLocalDateString, formatDate, formatCurrency } from '../../core/format.js';
-import { add } from '../expenses/actions.js';
+import { commitEntries } from './commit-entries.js';
 import { addSubcategory } from '../categories/actions.js';
-import { isIncomeCategory } from '../categories/categories.model.js';
 import { parse } from './parser.js';
 import { getLearnedLookup, recordOutcome, nextSuggestion, acceptSuggestion, dismissSuggestion } from './learned.js';
 import { extractWithLLM } from './engine-llm.js';
-import { DEFAULT_MODELS } from './providers.js';
+import { defaultModelFor } from './providers.js';
 import { startTrialIfNeeded, getEntitlement, activateLicense, TRIAL_DAYS } from './entitlement.js';
 import { logInteraction, markOutcome } from './audit-log.js';
 import { mountAssistantSettings, getAssistantConfig } from './settings.js';
@@ -193,11 +192,13 @@ async function handleSend() {
         const res = await extractWithLLM(text, {
             categories: s.categories,
             settings: s.settings,
-            config: { ...cfg, model: cfg.model || DEFAULT_MODELS[cfg.provider] }
+            config: { ...cfg, model: cfg.model || defaultModelFor(cfg.provider) }
         });
         typing.remove();
         if (!res.ok) {
-            addBubble('bot', el('p', { class: 'xbot-error' }, res.error));
+            addBubble('bot', el('p', { class: 'xbot-note' },
+                `⚠️ AI mode unavailable (${res.error}) — using the offline parser instead.`));
+            runOfflineParse(text, s);
             return;
         }
         const logId = logInteraction({ rawText: text, engine: 'llm', entries: res.entries });
@@ -208,23 +209,27 @@ async function handleSend() {
         }
         renderPreview(res.entries, [], logId, res.reply);
     } else {
-        const result = parse(text, {
-            categories: s.categories,
-            todayStr: getLocalDateString(new Date()),
-            currencyCode: s.settings?.currency,
-            learned: getLearnedLookup(s.categories)
-        });
-        const logId = logInteraction({ rawText: text, engine: 'parser', entries: result.entries });
-        if (!result.entries.length) {
-            addBubble('bot',
-                el('p', {}, 'I couldn’t find any amounts in that. Try something like:'),
-                el('p', {}, el('em', {}, 'lunch 150, rickshaw 40'))
-            );
-            markOutcome(logId, { cancelled: true });
-            return;
-        }
-        renderPreview(result.entries, result.unmatched, logId, '');
+        runOfflineParse(text, s);
     }
+}
+
+function runOfflineParse(text, s) {
+    const result = parse(text, {
+        categories: s.categories,
+        todayStr: getLocalDateString(new Date()),
+        currencyCode: s.settings?.currency,
+        learned: getLearnedLookup(s.categories)
+    });
+    const logId = logInteraction({ rawText: text, engine: 'parser', entries: result.entries });
+    if (!result.entries.length) {
+        addBubble('bot',
+            el('p', {}, 'I couldn’t find any amounts in that. Try something like:'),
+            el('p', {}, el('em', {}, 'lunch 150, rickshaw 40'))
+        );
+        markOutcome(logId, { cancelled: true });
+        return;
+    }
+    renderPreview(result.entries, result.unmatched, logId, '');
 }
 
 // ---- preview / confirm -----------------------------------------------------
@@ -277,23 +282,7 @@ function onConfirm(_ev, btn) {
     const selected = checkedIdx.map(i => rec.entries[i]).filter(Boolean);
 
     const currency = store.getState().settings?.currency;
-    const base = Date.now();
-    const okIds = [];
-    const accepted = [];
-    const errors = [];
-    selected.forEach((e, i) => {
-        const res = add({
-            id: String(base + i),
-            date: e.date,
-            category: e.category,
-            subcategory: e.subcategory,
-            amount: e.amount,
-            description: e.description,
-            currency
-        }, { isIncomeCategory });
-        if (res.ok) { okIds.push(res.expense.id); accepted.push(e); }
-        else errors.push(`${e.description || e.subcategory}: ${res.error}`);
-    });
+    const { accepted, okIds, errors } = commitEntries(selected, { currency });
 
     markOutcome(rec.logId, {
         acceptedIds: okIds,

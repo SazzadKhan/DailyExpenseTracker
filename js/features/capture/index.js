@@ -13,10 +13,11 @@
 import { $, $$, on, delegate, el, setVisible } from '../../core/dom.js';
 import { store } from '../../core/store.js';
 import { getLocalDateString, formatDate, formatCurrency } from '../../core/format.js';
-import { add, remove } from '../expenses/actions.js';
+import { remove } from '../expenses/actions.js';
 import { open as openEditModal } from '../expenses/edit-modal.js';
 import { addSubcategory } from '../categories/actions.js';
 import { isIncomeCategory } from '../categories/categories.model.js';
+import { commitEntries } from '../assistant/commit-entries.js';
 import { parse } from '../assistant/parser.js';
 import { logInteraction, markOutcome, exportLog } from '../assistant/audit-log.js';
 import { getLearnedLookup, recordOutcome, nextSuggestion, acceptSuggestion, dismissSuggestion } from '../assistant/learned.js';
@@ -79,25 +80,9 @@ function handleSubmit() {
     }
 
     // Save everything optimistically; a wrong guess is flagged, never dropped.
-    const base = Date.now();
-    const saved = [];
-    const accepted = [];
-    const errors = [];
-    result.entries.forEach((e, i) => {
-        const res = add({
-            id: String(base + i),
-            date: e.date,
-            category: e.category,
-            subcategory: e.subcategory,
-            amount: e.amount,
-            description: e.description,
-            currency
-        }, { isIncomeCategory });
-        if (res.ok) { saved.push({ ...res.expense, needsReview: !!e.needsReview }); accepted.push(e); }
-        else errors.push(`${e.description || e.subcategory}: ${res.error}`);
-    });
+    const { saved, accepted, okIds, errors } = commitEntries(result.entries, { currency });
 
-    markOutcome(logId, { acceptedIds: saved.map(x => x.id) });
+    markOutcome(logId, { acceptedIds: okIds });
     if (accepted.length) recordOutcome(accepted);
     inputEl.value = '';
     renderReceipt(saved, result.unmatched, errors);

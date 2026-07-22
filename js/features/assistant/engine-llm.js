@@ -38,7 +38,7 @@ export const ENTRY_SCHEMA = Object.freeze({
 /**
  * @param {string} userText
  * @param {{ categories:object, settings:object,
- *           config:{ provider:string, apiKey:string, model:string } }} deps
+ *           config:{ provider:string, apiKey:string, model:string, baseUrl?:string } }} deps
  * @returns {Promise<{ ok:true, entries:object[], reply:string } | { ok:false, error:string }>}
  */
 export async function extractWithLLM(userText, { categories, settings, config }) {
@@ -55,6 +55,7 @@ export async function extractWithLLM(userText, { categories, settings, config })
             provider: config.provider,
             apiKey: config.apiKey,
             model: config.model,
+            baseUrl: config.baseUrl,
             system,
             userText,
             schema: ENTRY_SCHEMA

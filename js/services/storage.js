@@ -5,11 +5,9 @@
 //
 // Local app data is persisted independently via js/services/local-store.js.
 // This module is only the *cloud mirror* layer.
-//
-// Note: SheetsBackend currently delegates to `window.sheetsApi` (still a
-// classic script). The Sheets layer will be migrated next.
 
 import { log } from '../core/log.js';
+import { sheetsApi } from './sheets-api.js';
 
 const $log = log('storage');
 
@@ -31,34 +29,34 @@ const SHEETS_BACKEND = {
     name: 'sheets',
 
     async init() {
-        await window.sheetsApi.findOrCreateSpreadsheet();
+        await sheetsApi.findOrCreateSpreadsheet();
         return true;
     },
 
     async pullAll() {
         const [expenses, settings, categories] = await Promise.all([
-            window.sheetsApi.listExpenses(),
-            window.sheetsApi.getSettings(),
-            window.sheetsApi.getCategories()
+            sheetsApi.listExpenses(),
+            sheetsApi.getSettings(),
+            sheetsApi.getCategories()
         ]);
         return { expenses, settings, categories };
     },
 
     async pushAll({ expenses, settings, categories }) {
         await Promise.all([
-            window.sheetsApi.replaceAllExpenses(expenses || []),
-            settings ? window.sheetsApi.saveSettings(settings) : Promise.resolve(),
-            categories ? window.sheetsApi.saveCategories(categories) : Promise.resolve()
+            sheetsApi.replaceAllExpenses(expenses || []),
+            settings ? sheetsApi.saveSettings(settings) : Promise.resolve(),
+            categories ? sheetsApi.saveCategories(categories) : Promise.resolve()
         ]);
     },
 
-    addExpense(exp)          { return window.sheetsApi.appendExpense(exp); },
-    updateExpense(exp)       { return window.sheetsApi.updateExpense(exp); },
-    deleteExpense(id)        { return window.sheetsApi.deleteExpense(id); },
-    deleteAllExpenses()      { return window.sheetsApi.deleteAllExpenses(); },
-    replaceAllExpenses(list) { return window.sheetsApi.replaceAllExpenses(list); },
-    saveSettings(s)          { return window.sheetsApi.saveSettings(s); },
-    saveCategories(c)        { return window.sheetsApi.saveCategories(c); }
+    addExpense(exp)          { return sheetsApi.appendExpense(exp); },
+    updateExpense(exp)       { return sheetsApi.updateExpense(exp); },
+    deleteExpense(id)        { return sheetsApi.deleteExpense(id); },
+    deleteAllExpenses()      { return sheetsApi.deleteAllExpenses(); },
+    replaceAllExpenses(list) { return sheetsApi.replaceAllExpenses(list); },
+    saveSettings(s)          { return sheetsApi.saveSettings(s); },
+    saveCategories(c)        { return sheetsApi.saveCategories(c); }
 };
 
 export const storage = {

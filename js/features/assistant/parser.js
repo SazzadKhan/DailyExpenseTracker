@@ -213,6 +213,8 @@ const SYNONYMS = {
     milk: ['Food & Dining', 'Groceries'],
     dudh: ['Food & Dining', 'Groceries'],
     'দুধ': ['Food & Dining', 'Groceries'],
+    doi: ['Food & Dining', 'Groceries'],
+    'দই': ['Food & Dining', 'Groceries'],
     bread: ['Food & Dining', 'Groceries'],
     pauruti: ['Food & Dining', 'Groceries'],
     'পাউরুটি': ['Food & Dining', 'Groceries'],
@@ -222,6 +224,8 @@ const SYNONYMS = {
     'কলা': ['Food & Dining', 'Groceries'],
     'ফল': ['Food & Dining', 'Groceries'],
     mango: ['Food & Dining', 'Groceries'],
+    jackfruit: ['Food & Dining', 'Groceries'],
+    'কাঁঠাল': ['Food & Dining', 'Groceries'],
     potato: ['Food & Dining', 'Groceries'],
     alu: ['Food & Dining', 'Groceries'],
     'আলু': ['Food & Dining', 'Groceries'],
@@ -698,6 +702,30 @@ export function pairSplit(text) {
         const next = bare[i + 1];
         return !(next && UNIT_WORDS.has(fold(next))); // "2 kg" — quantity
     });
+
+    // A small bare integer at an item boundary, followed by an item word and
+    // then a LARGER price, is a quantity — not a price ("2 jackfruit 200" = two
+    // jackfruit for 200, exactly like the glued "2kg doi 540"). Guards keep
+    // amount-first run-ons ("banana 50 rickshaw 40") and genuine small
+    // back-to-back prices ("tea 5 pan 5") intact: the count must be ≤ 20, start
+    // a group (line start or right after a previous item's price), be followed
+    // by a word, and have a strictly larger amount after it to serve as the price.
+    const QTY_MAX = 20;
+    const nextAmountValue = (from) => {
+        for (let j = from; j < tokens.length; j++) {
+            if (isAmount[j]) return Number(bare[j].replace(/^[-৳$£€₹¥]/, ''));
+        }
+        return null;
+    };
+    isAmount.forEach((v, i) => {
+        if (!v || !/^\d+$/.test(bare[i]) || Number(bare[i]) > QTY_MAX) return;
+        const atBoundary = i === 0 || isAmount[i - 1];
+        const nextWord = bare[i + 1];
+        if (!atBoundary || !nextWord || isAmount[i + 1] || !/\p{L}/u.test(nextWord)) return;
+        const price = nextAmountValue(i + 1);
+        if (price != null && price > Number(bare[i])) isAmount[i] = false;
+    });
+
     const idxs = [];
     isAmount.forEach((v, i) => v && idxs.push(i));
     if (idxs.length < 2) return [text];

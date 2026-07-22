@@ -1,6 +1,6 @@
 /* ============================================================
    Premium Effects Layer — subtle animations
-   Loaded after styles.css so these rules win where needed.
+   Loaded after the main stylesheets so these rules win where needed.
    Respects prefers-reduced-motion.
    ============================================================ */
 

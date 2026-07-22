@@ -7,7 +7,12 @@ import { open as openAddModal } from '../expenses/add-modal.js';
 import { open as openEditModal, close as closeEditModal } from '../expenses/edit-modal.js';
 import { remove as removeExpense } from '../expenses/actions.js';
 
-function handleNavigation(page) {
+/**
+ * Switch the active nav-page. Exported so other features (e.g. contextual
+ * "how it works" links) can navigate without faking a nav-item click.
+ * @param {string} page value matching a `.nav-item[data-page]` / `.nav-page[data-page]`
+ */
+export function navigateTo(page) {
     // Special popup pages
     if (page === 'add') {
         openAddModal();
@@ -34,7 +39,7 @@ function wireBottomNav() {
     for (const item of bottomNav.querySelectorAll('.nav-item')) {
         item.addEventListener('click', () => {
             const page = /** @type {HTMLElement} */ (item).dataset.page;
-            if (page) handleNavigation(page);
+            if (page) navigateTo(page);
         });
     }
 }
